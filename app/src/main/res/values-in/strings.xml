@@ -25,6 +25,9 @@
     <string name="status_permission_body">Layboard butuh akses Bluetooth untuk terhubung ke komputer Anda. Aplikasi ini tidak pernah memakai internet.</string>
     <string name="status_off_title">Bluetooth mati</string>
     <string name="status_off_body">Nyalakan Bluetooth untuk terhubung ke komputer Anda.</string>
+    <string name="status_busy_title">Keyboard Bluetooth sedang dipakai</string>
+    <string name="status_busy_body">Aplikasi lain, seperti Blek, mungkin sedang memakai ponsel ini sebagai keyboard dan mouse Bluetooth. Tutup sampai benar-benar berhenti, lalu coba lagi.</string>
+    <string name="action_try_again">Coba lagi</string>
     <string name="action_allow_bluetooth">Izinkan akses Bluetooth</string>
     <string name="action_open_settings">Buka pengaturan aplikasi</string>
     <string name="action_turn_on_bluetooth">Nyalakan Bluetooth</string>

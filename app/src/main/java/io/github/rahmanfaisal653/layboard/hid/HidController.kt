@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 
 /**
  * Presents the Phone as a Bluetooth HID keyboard + mouse and sends reports to the connected Host.
@@ -20,9 +21,12 @@ import android.os.Looper
  */
 @SuppressLint("MissingPermission")
 class HidController(
-    private val context: Context,
+    appContext: Context,
     private val listener: Listener,
 ) {
+    // The proxy must outlive any single Activity instance.
+    private val context: Context = appContext.applicationContext
+
     enum class Link { DISCONNECTED, CONNECTING, CONNECTED }
 
     /** Why the Phone could not act as a HID device; shown to help diagnose unsupported phones. */
@@ -46,15 +50,25 @@ class HidController(
     private var host: BluetoothDevice? = null
     private var mouseButtons = 0
     private var started = false
+    private val trace = StringBuilder()
 
+    /** Short log of what the Bluetooth stack answered, shown on the Status Screen for bug reports. */
+    val diagnostics: String get() = trace.toString().trim()
+
+    // Keeps the proxy open: a slow Bluetooth service may still answer after the verdict.
     private val unsupportedTimeout = Runnable {
-        stop()
+        note("service silent after ${UNSUPPORTED_TIMEOUT_MS / 1000}s")
         listener.onUnsupported(UnsupportedReason.NO_RESPONSE)
     }
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
-            if (registered) listener.onRegistered()
+            note("app registered=$registered")
+            if (registered) {
+                listener.onRegistered()
+            } else if (started) {
+                listener.onUnsupported(UnsupportedReason.REGISTER_REFUSED)
+            }
         }
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
@@ -77,6 +91,7 @@ class HidController(
     private val serviceListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             if (profile != BluetoothProfile.HID_DEVICE) return
+            note("service up")
             handler.removeCallbacks(unsupportedTimeout)
             val device = proxy as BluetoothHidDevice
             hid = device
@@ -87,10 +102,9 @@ class HidController(
                 BluetoothHidDevice.SUBCLASS1_COMBO,
                 HidReports.DESCRIPTOR,
             )
-            if (!device.registerApp(sdp, null, null, context.mainExecutor, callback)) {
-                stop()
-                listener.onUnsupported(UnsupportedReason.REGISTER_REFUSED)
-            }
+            val sent = device.registerApp(sdp, null, null, context.mainExecutor, callback)
+            note("register sent=$sent")
+            if (!sent) listener.onUnsupported(UnsupportedReason.REGISTER_REFUSED)
         }
 
         override fun onServiceDisconnected(profile: Int) {
@@ -100,12 +114,16 @@ class HidController(
 
     fun start() {
         if (started) return
+        trace.setLength(0)
         val bluetooth = adapter
         if (bluetooth == null) {
+            note("no adapter")
             listener.onUnsupported(UnsupportedReason.NO_BLUETOOTH)
             return
         }
-        if (!bluetooth.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)) {
+        val requested = bluetooth.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)
+        note("proxy requested=$requested")
+        if (!requested) {
             listener.onUnsupported(UnsupportedReason.PROFILE_REFUSED)
             return
         }
@@ -124,6 +142,11 @@ class HidController(
         host = null
         mouseButtons = 0
         started = false
+    }
+
+    private fun note(message: String) {
+        Log.d(TAG, message)
+        trace.append(message).append("; ")
     }
 
     fun connect(device: BluetoothDevice) {
@@ -171,6 +194,7 @@ class HidController(
     }
 
     private companion object {
+        const val TAG = "Layboard"
         const val MAX_STEP = 127
         const val UNSUPPORTED_TIMEOUT_MS = 10_000L
     }

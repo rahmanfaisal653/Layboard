@@ -30,6 +30,9 @@
     <string name="status_permission_body">Layboard needs Bluetooth access to talk to your computer. It never uses the internet.</string>
     <string name="status_off_title">Bluetooth is off</string>
     <string name="status_off_body">Turn on Bluetooth to connect to your computer.</string>
+    <string name="status_busy_title">Bluetooth keyboard is busy</string>
+    <string name="status_busy_body">Another app, such as Blek, may be using this phone as a Bluetooth keyboard and mouse. Close it completely, then try again.</string>
+    <string name="action_try_again">Try again</string>
     <string name="action_allow_bluetooth">Allow Bluetooth access</string>
     <string name="action_open_settings">Open app settings</string>
     <string name="action_turn_on_bluetooth">Turn on Bluetooth</string>

@@ -43,6 +43,7 @@ class MainActivity : Activity(), HidController.Listener {
     }
 
     private var unsupported = false
+    private var unsupportedReason: HidController.UnsupportedReason? = null
     private var unsupportedDetail: String? = null
     private var permissionPermanentlyDenied = false
     private var autoConnectTried = false
@@ -108,12 +109,22 @@ class MainActivity : Activity(), HidController.Listener {
 
     override fun onUnsupported(reason: HidController.UnsupportedReason) {
         unsupported = true
-        unsupportedDetail = "${reason.name} - ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}"
-        hid.stop()
+        unsupportedReason = reason
+        unsupportedDetail = listOf(
+            reason.name,
+            hid.diagnostics,
+            "${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}",
+        ).filter { it.isNotEmpty() }.joinToString("\n")
+        // A silent service keeps its proxy open so a late answer can still recover.
+        if (reason != HidController.UnsupportedReason.NO_RESPONSE) hid.stop()
         refresh()
     }
 
     override fun onRegistered() {
+        if (unsupported) {
+            unsupported = false
+            refresh()
+        }
         if (autoConnectTried) return
         autoConnectTried = true
         val address = prefs.lastHostAddress ?: return
@@ -147,7 +158,14 @@ class MainActivity : Activity(), HidController.Listener {
     private fun refresh() {
         val adapter = bluetooth
         if (adapter == null || unsupported) {
-            showStatus(R.string.status_unsupported_title, R.string.status_unsupported_body, null, null, unsupportedDetail)
+            val busy = unsupportedReason == HidController.UnsupportedReason.REGISTER_REFUSED
+            showStatus(
+                if (busy) R.string.status_busy_title else R.string.status_unsupported_title,
+                if (busy) R.string.status_busy_body else R.string.status_unsupported_body,
+                R.string.action_try_again,
+                ::retry,
+                unsupportedDetail,
+            )
             return
         }
         when {
@@ -214,6 +232,12 @@ class MainActivity : Activity(), HidController.Listener {
         val request = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
             .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, DISCOVERABLE_SECONDS)
         startActivityForResult(request, REQUEST_DISCOVERABLE)
+    }
+
+    private fun retry() {
+        unsupported = false
+        hid.stop()
+        refresh()
     }
 
     private fun askForPermission() {
