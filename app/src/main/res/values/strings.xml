@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Layboard</string>
+
+    <!-- Hosts -->
+    <string name="hosts_label">Paired hosts</string>
+    <string name="hosts_empty">No paired hosts yet.\nTap “Pair new host”, then choose this phone in your computer’s Bluetooth settings.</string>
+    <string name="hosts_pair">Pair new host</string>
+    <string name="hosts_speed_label">Pointer speed</string>
+    <string name="connecting">Connecting to %1$s…</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="could_not_connect">Could not connect to %1$s</string>
+
+    <!-- Input -->
+    <string name="input_keyboard">Keyboard</string>
+    <string name="input_disconnect">Disconnect</string>
+    <string name="mouse_hint">Slide to move the cursor</string>
+    <string name="click_left">Left click</string>
+    <string name="click_right">Right click</string>
+    <string name="key_esc" translatable="false">Esc</string>
+    <string name="key_tab" translatable="false">Tab</string>
+    <string name="key_ctrl" translatable="false">Ctrl</string>
+    <string name="key_alt" translatable="false">Alt</string>
+    <string name="key_win" translatable="false">Win</string>
+
+    <!-- Status -->
+    <string name="status_unsupported_title">This phone isn’t supported</string>
+    <string name="status_unsupported_body">Its Bluetooth system doesn’t offer the keyboard and mouse (HID) profile that Layboard needs.</string>
+    <string name="status_permission_title">Bluetooth permission needed</string>
+    <string name="status_permission_body">Layboard needs Bluetooth access to talk to your computer. It never uses the internet.</string>
+    <string name="status_off_title">Bluetooth is off</string>
+    <string name="status_off_body">Turn on Bluetooth to connect to your computer.</string>
+    <string name="action_allow_bluetooth">Allow Bluetooth access</string>
+    <string name="action_open_settings">Open app settings</string>
+    <string name="action_turn_on_bluetooth">Turn on Bluetooth</string>
+</resources>

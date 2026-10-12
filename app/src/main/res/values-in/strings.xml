@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Layboard</string>
+
+    <!-- Hosts -->
+    <string name="hosts_label">Host yang sudah dipasangkan</string>
+    <string name="hosts_empty">Belum ada host yang dipasangkan.\nKetuk “Pasangkan host baru”, lalu pilih ponsel ini di pengaturan Bluetooth komputer Anda.</string>
+    <string name="hosts_pair">Pasangkan host baru</string>
+    <string name="hosts_speed_label">Kecepatan kursor</string>
+    <string name="connecting">Menyambung ke %1$s…</string>
+    <string name="disconnected">Terputus</string>
+    <string name="could_not_connect">Tidak dapat menyambung ke %1$s</string>
+
+    <!-- Input -->
+    <string name="input_keyboard">Keyboard</string>
+    <string name="input_disconnect">Putuskan</string>
+    <string name="mouse_hint">Geser untuk menggerakkan kursor</string>
+    <string name="click_left">Klik kiri</string>
+    <string name="click_right">Klik kanan</string>
+
+    <!-- Status -->
+    <string name="status_unsupported_title">Ponsel ini tidak didukung</string>
+    <string name="status_unsupported_body">Sistem Bluetooth ponsel ini tidak menyediakan profil keyboard dan mouse (HID) yang dibutuhkan Layboard.</string>
+    <string name="status_permission_title">Izin Bluetooth diperlukan</string>
+    <string name="status_permission_body">Layboard butuh akses Bluetooth untuk terhubung ke komputer Anda. Aplikasi ini tidak pernah memakai internet.</string>
+    <string name="status_off_title">Bluetooth mati</string>
+    <string name="status_off_body">Nyalakan Bluetooth untuk terhubung ke komputer Anda.</string>
+    <string name="action_allow_bluetooth">Izinkan akses Bluetooth</string>
+    <string name="action_open_settings">Buka pengaturan aplikasi</string>
+    <string name="action_turn_on_bluetooth">Nyalakan Bluetooth</string>
+</resources>

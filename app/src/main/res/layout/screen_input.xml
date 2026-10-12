@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/input_host_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="@color/text_primary"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/input_keyboard"
+            style="@style/TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/input_keyboard" />
+
+        <Button
+            android:id="@+id/input_disconnect"
+            style="@style/TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/input_disconnect" />
+    </LinearLayout>
+
+    <io.github.rahmanfaisal653.layboard.mouse.MouseAreaView
+        android:id="@+id/input_mouse"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_mouse" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/click_left"
+            style="@style/ClickButton"
+            android:layout_width="0dp"
+            android:layout_height="64dp"
+            android:layout_margin="4dp"
+            android:layout_weight="1"
+            android:text="@string/click_left" />
+
+        <Button
+            android:id="@+id/click_right"
+            style="@style/ClickButton"
+            android:layout_width="0dp"
+            android:layout_height="64dp"
+            android:layout_margin="4dp"
+            android:layout_weight="1"
+            android:text="@string/click_right" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/key_esc"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="@string/key_esc" />
+
+        <Button
+            android:id="@+id/key_tab"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="@string/key_tab" />
+
+        <Button
+            android:id="@+id/key_ctrl"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="@string/key_ctrl" />
+
+        <Button
+            android:id="@+id/key_alt"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="@string/key_alt" />
+
+        <Button
+            android:id="@+id/key_win"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="@string/key_win" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/key_left"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="←" />
+
+        <Button
+            android:id="@+id/key_up"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="↑" />
+
+        <Button
+            android:id="@+id/key_down"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="↓" />
+
+        <Button
+            android:id="@+id/key_right"
+            style="@style/KeyButton"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_margin="2dp"
+            android:layout_weight="1"
+            android:text="→" />
+    </LinearLayout>
+
+    <io.github.rahmanfaisal653.layboard.keyboard.KeyboardCaptureView
+        android:id="@+id/input_capture"
+        android:layout_width="match_parent"
+        android:layout_height="1dp" />
+</LinearLayout>
