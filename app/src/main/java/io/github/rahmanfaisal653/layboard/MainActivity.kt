@@ -158,9 +158,14 @@ class MainActivity : Activity(), HidController.Listener {
             }
             !adapter.isEnabled -> {
                 hid.stop()
-                showStatus(R.string.status_off_title, R.string.status_off_body, R.string.action_turn_on_bluetooth) {
-                    startActivityForResult(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), REQUEST_ENABLE)
-                }
+                showStatus(
+                    R.string.status_off_title,
+                    R.string.status_off_body,
+                    R.string.action_turn_on_bluetooth,
+                    onAction = {
+                        startActivityForResult(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), REQUEST_ENABLE)
+                    },
+                )
             }
             else -> {
                 hid.start()
