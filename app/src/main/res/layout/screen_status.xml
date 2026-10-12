@@ -22,6 +22,17 @@
         android:layout_marginTop="12dp"
         android:gravity="center" />
 
+    <TextView
+        android:id="@+id/status_detail"
+        style="@style/Body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:textIsSelectable="true"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
     <Button
         android:id="@+id/status_action"
         style="@style/PrimaryButton"

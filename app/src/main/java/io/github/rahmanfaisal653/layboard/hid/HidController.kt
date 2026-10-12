@@ -25,9 +25,12 @@ class HidController(
 ) {
     enum class Link { DISCONNECTED, CONNECTING, CONNECTED }
 
+    /** Why the Phone could not act as a HID device; shown to help diagnose unsupported phones. */
+    enum class UnsupportedReason { NO_BLUETOOTH, PROFILE_REFUSED, NO_RESPONSE, REGISTER_REFUSED }
+
     interface Listener {
         /** The Phone's Bluetooth stack cannot act as a HID device. */
-        fun onUnsupported()
+        fun onUnsupported(reason: UnsupportedReason)
 
         /** The Phone is advertised as a keyboard + mouse and can connect to Hosts. */
         fun onRegistered()
@@ -46,7 +49,7 @@ class HidController(
 
     private val unsupportedTimeout = Runnable {
         stop()
-        listener.onUnsupported()
+        listener.onUnsupported(UnsupportedReason.NO_RESPONSE)
     }
 
     private val callback = object : BluetoothHidDevice.Callback() {
@@ -86,7 +89,7 @@ class HidController(
             )
             if (!device.registerApp(sdp, null, null, context.mainExecutor, callback)) {
                 stop()
-                listener.onUnsupported()
+                listener.onUnsupported(UnsupportedReason.REGISTER_REFUSED)
             }
         }
 
@@ -98,8 +101,12 @@ class HidController(
     fun start() {
         if (started) return
         val bluetooth = adapter
-        if (bluetooth == null || !bluetooth.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)) {
-            listener.onUnsupported()
+        if (bluetooth == null) {
+            listener.onUnsupported(UnsupportedReason.NO_BLUETOOTH)
+            return
+        }
+        if (!bluetooth.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)) {
+            listener.onUnsupported(UnsupportedReason.PROFILE_REFUSED)
             return
         }
         started = true
@@ -165,6 +172,6 @@ class HidController(
 
     private companion object {
         const val MAX_STEP = 127
-        const val UNSUPPORTED_TIMEOUT_MS = 4000L
+        const val UNSUPPORTED_TIMEOUT_MS = 10_000L
     }
 }

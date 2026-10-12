@@ -43,6 +43,7 @@ class MainActivity : Activity(), HidController.Listener {
     }
 
     private var unsupported = false
+    private var unsupportedDetail: String? = null
     private var permissionPermanentlyDenied = false
     private var autoConnectTried = false
     private var connectedHost: BluetoothDevice? = null
@@ -105,8 +106,9 @@ class MainActivity : Activity(), HidController.Listener {
 
     // HidController.Listener
 
-    override fun onUnsupported() {
+    override fun onUnsupported(reason: HidController.UnsupportedReason) {
         unsupported = true
+        unsupportedDetail = "${reason.name} - ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}"
         hid.stop()
         refresh()
     }
@@ -145,7 +147,7 @@ class MainActivity : Activity(), HidController.Listener {
     private fun refresh() {
         val adapter = bluetooth
         if (adapter == null || unsupported) {
-            showStatus(R.string.status_unsupported_title, R.string.status_unsupported_body, null, null)
+            showStatus(R.string.status_unsupported_title, R.string.status_unsupported_body, null, null, unsupportedDetail)
             return
         }
         when {
@@ -168,9 +170,9 @@ class MainActivity : Activity(), HidController.Listener {
         }
     }
 
-    private fun showStatus(title: Int, body: Int, action: Int?, onAction: (() -> Unit)?) {
+    private fun showStatus(title: Int, body: Int, action: Int?, onAction: (() -> Unit)?, detail: String? = null) {
         inputScreen.hideKeyboard()
-        statusScreen.bind(title, body, action, onAction)
+        statusScreen.bind(title, body, action, onAction, detail)
         show(statusScreen.view)
     }
 

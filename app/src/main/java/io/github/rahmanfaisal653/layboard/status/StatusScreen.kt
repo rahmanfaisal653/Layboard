@@ -13,11 +13,14 @@ class StatusScreen(context: Context) {
 
     private val title: TextView = view.findViewById(R.id.status_title)
     private val body: TextView = view.findViewById(R.id.status_body)
+    private val detail: TextView = view.findViewById(R.id.status_detail)
     private val action: Button = view.findViewById(R.id.status_action)
 
-    fun bind(titleRes: Int, bodyRes: Int, actionRes: Int?, onAction: (() -> Unit)?) {
+    fun bind(titleRes: Int, bodyRes: Int, actionRes: Int?, onAction: (() -> Unit)?, detailText: String? = null) {
         title.setText(titleRes)
         body.setText(bodyRes)
+        detail.text = detailText
+        detail.visibility = if (detailText == null) View.GONE else View.VISIBLE
         if (actionRes == null || onAction == null) {
             action.visibility = View.GONE
         } else {
