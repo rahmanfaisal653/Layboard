@@ -13,12 +13,14 @@ class ReportSender(
 ) {
     /**
      * A report waiting its turn; [releaseFollows] marks a key press, which must never go out without its
-     * release, and [motion] a pointer move that later moves may still be merged into.
+     * release, [buttons] the Click Buttons a mouse report holds, and [motion] a pointer move that later
+     * moves may still be merged into.
      */
     private class Pending(
         val id: Int,
         val data: ByteArray,
         val releaseFollows: Boolean = false,
+        val buttons: Int? = null,
         val motion: Motion? = null,
     )
 
@@ -27,7 +29,11 @@ class ReportSender(
     private val queue = ArrayDeque<Pending>()
 
     // True from a key press going out until its release does.
-    private var held = false
+    private var keyHeld = false
+
+    // The Click Buttons as last asked for, and as the last mouse report sent left them on the Host.
+    private var buttons = 0
+    private var buttonsOnHost = 0
 
     // True while the pause after the last report is running.
     private var resting = false
@@ -39,18 +45,25 @@ class ReportSender(
         sendNext()
     }
 
-    /** Sends one mouse report as it is, e.g. a button change; [dx] and [dy] must be within one report's limit. */
-    fun sendMouse(buttons: Int, dx: Int, dy: Int) {
-        queue.addLast(Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, dx, dy)))
+    /**
+     * Presses or releases the Click Button [mask], leaving any other held. Moves made while one is held
+     * carry it, so the Host sees a drag until it is released. A button already in that state sends nothing.
+     */
+    fun setClickButton(mask: Int, down: Boolean) {
+        val changed = if (down) buttons or mask else buttons and mask.inv()
+        if (changed == buttons) return
+        buttons = changed
+        queue.addLast(buttonChange(buttons))
         sendNext()
     }
 
     /**
-     * Moves the pointer by [dx], [dy] with [buttons] held. A move still waiting at the end of the queue
-     * with the same buttons absorbs it, so a burst made while the link rests goes out as one report; what
-     * does not fit in one report's limit follows in as many more as it needs. Nothing is lost on the way.
+     * Moves the pointer by [dx], [dy] with the Click Buttons held now. A move still waiting at the end of
+     * the queue with the same buttons absorbs it, so a burst made while the link rests goes out as one
+     * report; what does not fit in one report's limit follows in as many more as it needs. Nothing is lost
+     * on the way.
      */
-    fun moveMouse(buttons: Int, dx: Int, dy: Int) {
+    fun moveMouse(dx: Int, dy: Int) {
         var restX = dx
         var restY = dy
         val tail = queue.lastOrNull()?.motion
@@ -74,18 +87,25 @@ class ReportSender(
 
     /**
      * Drops every report not yet sent, and says so in the trace. A key already pressed keeps its
-     * release, which still goes out after the usual pause, so nothing is left held on the Host.
+     * release, and a Click Button held on the Host gets one; they go out as soon as any pause
+     * still running ends, so nothing is left held on the Host.
      */
     fun clear() {
-        val release = if (held) queue.firstOrNull() else null
+        val release = if (keyHeld) queue.firstOrNull() else null
         val dropped = queue.size - (if (release != null) 1 else 0)
         queue.clear()
         if (release != null) queue.addLast(release)
+        buttons = 0
+        if (buttonsOnHost != 0) queue.addLast(buttonChange(0))
         if (dropped > 0) trace.note("dropped $dropped unsent reports")
+        sendNext()
     }
 
+    private fun buttonChange(buttons: Int) =
+        Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, 0, 0), buttons = buttons)
+
     private fun motion(buttons: Int, dx: Int, dy: Int) =
-        Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, dx, dy), motion = Motion(buttons, dx, dy))
+        Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, dx, dy), buttons = buttons, motion = Motion(buttons, dx, dy))
 
     // As much of [distance] as one mouse report can carry.
     private fun step(distance: Int) = distance.coerceIn(-MAX_STEP, MAX_STEP)
@@ -93,7 +113,8 @@ class ReportSender(
     private fun sendNext() {
         if (resting) return
         val next = queue.removeFirstOrNull() ?: return
-        held = next.releaseFollows
+        keyHeld = next.releaseFollows
+        next.buttons?.let { buttonsOnHost = it }
         trace.report(next.id, next.data, gateway.sendReport(next.id, next.data))
         resting = true
         scheduler.postDelayed(pauseMs) {

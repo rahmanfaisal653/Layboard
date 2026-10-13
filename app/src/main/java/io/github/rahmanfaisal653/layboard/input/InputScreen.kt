@@ -127,11 +127,11 @@ class InputScreen(
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     button.isPressed = true
-                    hid.setMouseButton(mask, true)
+                    hid.setClickButton(mask, true)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     button.isPressed = false
-                    hid.setMouseButton(mask, false)
+                    hid.setClickButton(mask, false)
                 }
             }
             true

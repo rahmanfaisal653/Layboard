@@ -93,10 +93,10 @@ class ReportSenderTest {
 
     @Test
     fun mouseReportsAreRecordedInTheTraceToo() {
-        sender.sendMouse(HidReports.BUTTON_LEFT, 5, -3)
+        sender.moveMouse(5, -3)
 
         assertEquals(1, trace.lines.size)
-        assertTrue("01 05 fd" in trace.lines[0])
+        assertTrue("00 05 fd" in trace.lines[0])
     }
 
     @Test
@@ -129,7 +129,7 @@ class ReportSenderTest {
         scheduler.advanceBy(3)
         paced.pressKey(0, 0x05)
         scheduler.advanceBy(1)
-        paced.sendMouse(0, 1, 1)
+        paced.moveMouse(1, 1)
         settle()
 
         assertEquals(5, gateway.calls.size)
@@ -226,7 +226,7 @@ class ReportSenderTest {
 
     @Test
     fun aPressWaitingBehindOtherReportsIsDroppedTogetherWithItsRelease() {
-        sender.sendMouse(0, 1, 0)
+        sender.moveMouse(1, 0)
         sender.pressKey(0, 0x04)
         sender.clear()
         settle()
@@ -236,9 +236,9 @@ class ReportSenderTest {
 
     @Test
     fun movesMadeWhileTheLinkRestsAreMergedIntoOneReport() {
-        sender.moveMouse(0, 1, 1)
-        sender.moveMouse(0, 2, -3)
-        sender.moveMouse(0, 4, 5)
+        sender.moveMouse(1, 1)
+        sender.moveMouse(2, -3)
+        sender.moveMouse(4, 5)
         settle()
 
         assertEquals(listOf(mouse(0, 1, 1), mouse(0, 6, 2)), gateway.calls)
@@ -246,7 +246,7 @@ class ReportSenderTest {
 
     @Test
     fun aMoveTooBigForOneReportIsSplitAndNothingIsLost() {
-        sender.moveMouse(0, 300, -200)
+        sender.moveMouse(300, -200)
         settle()
 
         assertEquals(listOf(mouse(0, 127, -127), mouse(0, 127, -73), mouse(0, 46, 0)), gateway.calls)
@@ -256,7 +256,7 @@ class ReportSenderTest {
     fun aFastSwipeAddsUpToItsFullTravelInReportsTheLinkCanCarry() {
         val moves = List(500) { (it % 90) - 20 to 60 - (it % 70) }
 
-        moves.forEach { (dx, dy) -> sender.moveMouse(0, dx, dy) }
+        moves.forEach { (dx, dy) -> sender.moveMouse(dx, dy) }
         settle()
 
         assertEquals(moves.sumOf { it.first } to moves.sumOf { it.second }, movementSent())
@@ -267,9 +267,9 @@ class ReportSenderTest {
 
     @Test
     fun mergingStopsAtTheLimitAndTheRestGoesInTheNextReport() {
-        sender.moveMouse(0, 1, 0) // goes out at once
-        sender.moveMouse(0, 100, 0)
-        sender.moveMouse(0, 100, 0)
+        sender.moveMouse(1, 0) // goes out at once
+        sender.moveMouse(100, 0)
+        sender.moveMouse(100, 0)
         settle()
 
         assertEquals(listOf(mouse(0, 1, 0), mouse(0, 127, 0), mouse(0, 73, 0)), gateway.calls)
@@ -277,9 +277,9 @@ class ReportSenderTest {
 
     @Test
     fun movesThatCancelOutWhileWaitingSendNothing() {
-        sender.moveMouse(0, 1, 0) // goes out at once
-        sender.moveMouse(0, 5, -2)
-        sender.moveMouse(0, -5, 2)
+        sender.moveMouse(1, 0) // goes out at once
+        sender.moveMouse(5, -2)
+        sender.moveMouse(-5, 2)
         settle()
 
         assertEquals(listOf(mouse(0, 1, 0)), gateway.calls)
@@ -287,13 +287,13 @@ class ReportSenderTest {
 
     @Test
     fun aMoveIsNeverMergedIntoAButtonChangeOrAcrossOne() {
-        sender.moveMouse(0, 1, 0) // goes out at once
-        sender.moveMouse(0, 2, 0)
-        sender.sendMouse(HidReports.BUTTON_LEFT, 0, 0)
-        sender.moveMouse(HidReports.BUTTON_LEFT, 3, 0)
-        sender.moveMouse(HidReports.BUTTON_LEFT, 4, 0)
-        sender.sendMouse(0, 0, 0)
-        sender.moveMouse(0, 5, 0)
+        sender.moveMouse(1, 0) // goes out at once
+        sender.moveMouse(2, 0)
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.moveMouse(3, 0)
+        sender.moveMouse(4, 0)
+        sender.setClickButton(HidReports.BUTTON_LEFT, false)
+        sender.moveMouse(5, 0)
         settle()
 
         assertEquals(
@@ -311,10 +311,10 @@ class ReportSenderTest {
 
     @Test
     fun aMoveIsNeverMergedAcrossAKey() {
-        sender.moveMouse(0, 1, 0) // goes out at once
-        sender.moveMouse(0, 2, 0)
+        sender.moveMouse(1, 0) // goes out at once
+        sender.moveMouse(2, 0)
         sender.pressKey(0, 0x04)
-        sender.moveMouse(0, 3, 0)
+        sender.moveMouse(3, 0)
         settle()
 
         assertEquals(listOf(mouse(0, 1, 0), mouse(0, 2, 0), press(0x04), release, mouse(0, 3, 0)), gateway.calls)
@@ -322,16 +322,141 @@ class ReportSenderTest {
 
     @Test
     fun aStillMoveSendsNothing() {
-        sender.moveMouse(0, 0, 0)
+        sender.moveMouse(0, 0)
         settle()
 
         assertTrue(gateway.calls.isEmpty())
     }
 
     @Test
+    fun eachClickButtonSendsAPressWhenPressedAndAReleaseWhenReleased() {
+        listOf(HidReports.BUTTON_LEFT, HidReports.BUTTON_RIGHT).forEach { button ->
+            gateway.clear()
+
+            sender.setClickButton(button, true)
+            sender.setClickButton(button, false)
+            settle()
+
+            assertEquals(listOf(mouse(button, 0, 0), mouse(0, 0, 0)), gateway.calls)
+        }
+    }
+
+    @Test
+    fun movingWhileLeftIsHeldDragsWithTheButtonHeldUntilItIsReleased() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.moveMouse(10, 0)
+        settle()
+        sender.moveMouse(0, -4)
+        settle()
+        sender.setClickButton(HidReports.BUTTON_LEFT, false)
+        sender.moveMouse(3, 3)
+        settle()
+
+        assertEquals(
+            listOf(
+                mouse(HidReports.BUTTON_LEFT, 0, 0),
+                mouse(HidReports.BUTTON_LEFT, 10, 0),
+                mouse(HidReports.BUTTON_LEFT, 0, -4),
+                mouse(0, 0, 0),
+                mouse(0, 3, 3),
+            ),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun aDragTooFastForOneReportKeepsTheButtonHeldInEveryPart() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.moveMouse(200, 0)
+        settle()
+
+        assertEquals(
+            listOf(mouse(HidReports.BUTTON_LEFT, 0, 0), mouse(HidReports.BUTTON_LEFT, 127, 0), mouse(HidReports.BUTTON_LEFT, 73, 0)),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun bothButtonsCanBeHeldAndReleasingOneKeepsTheOther() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.setClickButton(HidReports.BUTTON_RIGHT, true)
+        sender.setClickButton(HidReports.BUTTON_LEFT, false)
+        sender.moveMouse(2, 0)
+        sender.setClickButton(HidReports.BUTTON_RIGHT, false)
+        settle()
+
+        assertEquals(
+            listOf(
+                mouse(HidReports.BUTTON_LEFT, 0, 0),
+                mouse(HidReports.BUTTON_LEFT or HidReports.BUTTON_RIGHT, 0, 0),
+                mouse(HidReports.BUTTON_RIGHT, 0, 0),
+                mouse(HidReports.BUTTON_RIGHT, 2, 0),
+                mouse(0, 0, 0),
+            ),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun aButtonThatDoesNotChangeSendsNothing() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, false)
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        settle()
+
+        assertEquals(listOf(mouse(HidReports.BUTTON_LEFT, 0, 0)), gateway.calls)
+    }
+
+    @Test
+    fun clearingWhileAButtonIsHeldOnTheHostStillReleasesIt() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.moveMouse(5, 0)
+        sender.moveMouse(5, 0)
+
+        // The press is out; the drag waiting behind it is dropped, but the Host is not left holding Left.
+        sender.clear()
+        settle()
+
+        assertEquals(listOf(mouse(HidReports.BUTTON_LEFT, 0, 0), mouse(0, 0, 0)), gateway.calls)
+    }
+
+    @Test
+    fun clearingWhileAButtonRestsStillOnAnIdleLinkReleasesItAtOnce() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        settle()
+
+        sender.clear()
+
+        assertEquals(listOf(mouse(HidReports.BUTTON_LEFT, 0, 0), mouse(0, 0, 0)), gateway.calls)
+    }
+
+    @Test
+    fun clearingDuringAKeyAndADragReleasesBoth() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        settle()
+        sender.pressKey(0, 0x04)
+
+        sender.clear()
+        settle()
+
+        assertEquals(listOf(mouse(HidReports.BUTTON_LEFT, 0, 0), press(0x04), release, mouse(0, 0, 0)), gateway.calls)
+    }
+
+    @Test
+    fun clearingAPressNotYetSentSendsNoRelease() {
+        sender.moveMouse(1, 0) // goes out at once
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+
+        sender.clear()
+        settle()
+
+        assertEquals(listOf(mouse(0, 1, 0)), gateway.calls)
+    }
+
+    @Test
     fun keysAndMouseMovesKeepTheOrderTheyWereMadeIn() {
         sender.pressKey(0, 0x04)
-        sender.sendMouse(0, 3, 4)
+        sender.moveMouse(3, 4)
         sender.pressKey(0, 0x05)
         settle()
 

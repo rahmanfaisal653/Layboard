@@ -41,7 +41,6 @@ class HidController(
     // Reports go out through this while a Host is connected.
     private var sender: ReportSender? = null
     private var senderHost: BluetoothDevice? = null
-    private var mouseButtons = 0
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
@@ -66,7 +65,6 @@ class HidController(
                         senderHost = null
                         endReports()
                     }
-                    mouseButtons = 0
                     lifecycle.onLink(device, HidLifecycle.Link.DISCONNECTED)
                 }
             }
@@ -155,7 +153,6 @@ class HidController(
 
     fun stop() {
         endReports()
-        mouseButtons = 0
         lifecycle.stop()
     }
 
@@ -175,12 +172,12 @@ class HidController(
 
     /** Moves the Host pointer by any amount; [ReportSender] merges and splits it into reports the link carries. */
     fun moveMouse(dx: Int, dy: Int) {
-        connectedSender()?.moveMouse(mouseButtons, dx, dy)
+        connectedSender()?.moveMouse(dx, dy)
     }
 
-    fun setMouseButton(mask: Int, down: Boolean) {
-        mouseButtons = if (down) mouseButtons or mask else mouseButtons and mask.inv()
-        sendMouse(0, 0)
+    /** Presses or releases a Click Button; moves made while one is held drag on the Host. */
+    fun setClickButton(mask: Int, down: Boolean) {
+        connectedSender()?.setClickButton(mask, down)
     }
 
     private fun requestsFrom(device: BluetoothDevice): HostRequests? {
@@ -192,11 +189,7 @@ class HidController(
         return HostRequests(BluetoothHidGateway(service, device), trace)
     }
 
-    private fun sendMouse(dx: Int, dy: Int) {
-        connectedSender()?.sendMouse(mouseButtons, dx, dy)
-    }
-
-    // Reports still waiting are dropped; a key already pressed is still released, so none stays held.
+    // Reports still waiting are dropped; a key or Click Button already pressed is still released, so none stays held.
     private fun endReports() {
         sender?.clear()
         sender = null
