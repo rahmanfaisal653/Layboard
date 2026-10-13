@@ -34,6 +34,12 @@ class FakeHidGateway(private val now: () -> Long = { 0L }) : HidGateway {
         return accepts
     }
 
+    /** Forgets every call and its time, so the two lists never drift apart. */
+    fun clear() {
+        calls.clear()
+        times.clear()
+    }
+
     private fun record(call: Call) {
         calls += call
         times += now()

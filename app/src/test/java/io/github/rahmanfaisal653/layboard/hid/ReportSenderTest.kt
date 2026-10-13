@@ -33,7 +33,7 @@ class ReportSenderTest {
             "Up" to (KeyMap.UP to 0x52),
         )
         keys.forEach { (name, usages) ->
-            gateway.calls.clear()
+            gateway.clear()
 
             sender.pressKey(0, usages.first)
             settle()
@@ -184,6 +184,28 @@ class ReportSenderTest {
         settle()
 
         assertEquals(listOf(press(0x04), release), gateway.calls)
+    }
+
+    @Test
+    fun clearingNotesInTheTraceHowManyReportsWereDroppedUnsent() {
+        sender.pressKey(0, 0x04)
+        sender.pressKey(0, 0x05)
+        sender.pressKey(0, 0x06)
+        // Press 1 is out and its release is kept; presses 2 and 3 with their releases are dropped.
+        sender.clear()
+
+        assertTrue(trace.lines.last(), "dropped 4 unsent reports" in trace.lines.last())
+    }
+
+    @Test
+    fun clearingWithNothingWaitingLeavesTheTraceAlone() {
+        sender.pressKey(0, 0x04)
+        settle()
+        val before = trace.lines
+
+        sender.clear()
+
+        assertEquals(before, trace.lines)
     }
 
     @Test

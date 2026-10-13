@@ -35,13 +35,15 @@ class ReportSender(
     }
 
     /**
-     * Drops every report not yet sent. A key already pressed keeps its release, which still goes out
-     * after the usual pause, so nothing is left held on the Host.
+     * Drops every report not yet sent, and says so in the trace. A key already pressed keeps its
+     * release, which still goes out after the usual pause, so nothing is left held on the Host.
      */
     fun clear() {
         val release = if (held) queue.firstOrNull() else null
+        val dropped = queue.size - (if (release != null) 1 else 0)
         queue.clear()
         if (release != null) queue.addLast(release)
+        if (dropped > 0) trace.note("dropped $dropped unsent reports")
     }
 
     private fun sendNext() {

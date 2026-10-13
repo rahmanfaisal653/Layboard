@@ -77,8 +77,12 @@ class HidController(
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    // A repeated CONNECTED for the same Host keeps its sender, so reports have one pause clock.
+                    if (host?.address != device.address) endReports()
                     host = device
-                    sender = hid?.let { ReportSender(BluetoothHidGateway(it, device), trace, scheduler) }
+                    if (sender == null) {
+                        sender = hid?.let { ReportSender(BluetoothHidGateway(it, device), trace, scheduler) }
+                    }
                     listener.onLinkChanged(device, Link.CONNECTED)
                 }
                 BluetoothProfile.STATE_CONNECTING ->
