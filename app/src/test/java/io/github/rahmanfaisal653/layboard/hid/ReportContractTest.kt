@@ -1,6 +1,7 @@
 package io.github.rahmanfaisal653.layboard.hid
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,8 +33,23 @@ class ReportContractTest {
     }
 
     @Test
+    fun theMouseCanOnlyMoveSoTheHostIsNeverSentAScroll() {
+        assertTrue(GENERIC_DESKTOP_X in declared.usages)
+        assertTrue(GENERIC_DESKTOP_Y in declared.usages)
+        assertFalse(GENERIC_DESKTOP_WHEEL in declared.usages)
+        assertFalse(CONSUMER_AC_PAN in declared.usages)
+    }
+
+    @Test
     fun descriptorDeclaresNoOutputOrFeatureReports() {
         assertTrue(declared.outputBits.isEmpty())
         assertTrue(declared.featureBits.isEmpty())
+    }
+
+    private companion object {
+        val GENERIC_DESKTOP_X = HidDescriptorParser.usage(0x01, 0x30)
+        val GENERIC_DESKTOP_Y = HidDescriptorParser.usage(0x01, 0x31)
+        val GENERIC_DESKTOP_WHEEL = HidDescriptorParser.usage(0x01, 0x38)
+        val CONSUMER_AC_PAN = HidDescriptorParser.usage(0x0C, 0x238)
     }
 }

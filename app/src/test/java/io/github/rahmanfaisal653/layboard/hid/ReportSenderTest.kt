@@ -19,6 +19,13 @@ class ReportSenderTest {
 
     private val release = press(0)
 
+    private fun mouse(buttons: Int, dx: Int, dy: Int) = Call.Report(HidReports.ID_MOUSE, bytes(buttons, dx, dy))
+
+    private fun movementSent(): Pair<Int, Int> {
+        val reports = gateway.calls.filterIsInstance<Call.Report>().filter { it.id == HidReports.ID_MOUSE }
+        return reports.sumOf { it.data[1].toInt() } to reports.sumOf { it.data[2].toInt() }
+    }
+
     /** Lets every queued report go out, however long the pauses between them. */
     private fun settle() = scheduler.advanceBy(60_000)
 
@@ -225,6 +232,100 @@ class ReportSenderTest {
         settle()
 
         assertEquals(listOf(Call.Report(HidReports.ID_MOUSE, bytes(0, 1, 0))), gateway.calls)
+    }
+
+    @Test
+    fun movesMadeWhileTheLinkRestsAreMergedIntoOneReport() {
+        sender.moveMouse(0, 1, 1)
+        sender.moveMouse(0, 2, -3)
+        sender.moveMouse(0, 4, 5)
+        settle()
+
+        assertEquals(listOf(mouse(0, 1, 1), mouse(0, 6, 2)), gateway.calls)
+    }
+
+    @Test
+    fun aMoveTooBigForOneReportIsSplitAndNothingIsLost() {
+        sender.moveMouse(0, 300, -200)
+        settle()
+
+        assertEquals(listOf(mouse(0, 127, -127), mouse(0, 127, -73), mouse(0, 46, 0)), gateway.calls)
+    }
+
+    @Test
+    fun aFastSwipeAddsUpToItsFullTravelInReportsTheLinkCanCarry() {
+        val moves = List(500) { (it % 90) - 20 to 60 - (it % 70) }
+
+        moves.forEach { (dx, dy) -> sender.moveMouse(0, dx, dy) }
+        settle()
+
+        assertEquals(moves.sumOf { it.first } to moves.sumOf { it.second }, movementSent())
+        gateway.calls.filterIsInstance<Call.Report>().forEach { report ->
+            assertTrue("${report.data} is beyond the report's limit", report.data.drop(1).all { it in -127..127 })
+        }
+    }
+
+    @Test
+    fun mergingStopsAtTheLimitAndTheRestGoesInTheNextReport() {
+        sender.moveMouse(0, 1, 0) // goes out at once
+        sender.moveMouse(0, 100, 0)
+        sender.moveMouse(0, 100, 0)
+        settle()
+
+        assertEquals(listOf(mouse(0, 1, 0), mouse(0, 127, 0), mouse(0, 73, 0)), gateway.calls)
+    }
+
+    @Test
+    fun movesThatCancelOutWhileWaitingSendNothing() {
+        sender.moveMouse(0, 1, 0) // goes out at once
+        sender.moveMouse(0, 5, -2)
+        sender.moveMouse(0, -5, 2)
+        settle()
+
+        assertEquals(listOf(mouse(0, 1, 0)), gateway.calls)
+    }
+
+    @Test
+    fun aMoveIsNeverMergedIntoAButtonChangeOrAcrossOne() {
+        sender.moveMouse(0, 1, 0) // goes out at once
+        sender.moveMouse(0, 2, 0)
+        sender.sendMouse(HidReports.BUTTON_LEFT, 0, 0)
+        sender.moveMouse(HidReports.BUTTON_LEFT, 3, 0)
+        sender.moveMouse(HidReports.BUTTON_LEFT, 4, 0)
+        sender.sendMouse(0, 0, 0)
+        sender.moveMouse(0, 5, 0)
+        settle()
+
+        assertEquals(
+            listOf(
+                mouse(0, 1, 0),
+                mouse(0, 2, 0),
+                mouse(HidReports.BUTTON_LEFT, 0, 0),
+                mouse(HidReports.BUTTON_LEFT, 7, 0),
+                mouse(0, 0, 0),
+                mouse(0, 5, 0),
+            ),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun aMoveIsNeverMergedAcrossAKey() {
+        sender.moveMouse(0, 1, 0) // goes out at once
+        sender.moveMouse(0, 2, 0)
+        sender.pressKey(0, 0x04)
+        sender.moveMouse(0, 3, 0)
+        settle()
+
+        assertEquals(listOf(mouse(0, 1, 0), mouse(0, 2, 0), press(0x04), release, mouse(0, 3, 0)), gateway.calls)
+    }
+
+    @Test
+    fun aStillMoveSendsNothing() {
+        sender.moveMouse(0, 0, 0)
+        settle()
+
+        assertTrue(gateway.calls.isEmpty())
     }
 
     @Test

@@ -173,16 +173,9 @@ class HidController(
     /** Presses and releases modifier keys on their own, e.g. a lone Win/Cmd key. */
     fun sendModifierTap(modifiers: Int) = sendKey(modifiers, 0)
 
+    /** Moves the Host pointer by any amount; [ReportSender] merges and splits it into reports the link carries. */
     fun moveMouse(dx: Int, dy: Int) {
-        var remainingX = dx
-        var remainingY = dy
-        while (remainingX != 0 || remainingY != 0) {
-            val stepX = remainingX.coerceIn(-MAX_STEP, MAX_STEP)
-            val stepY = remainingY.coerceIn(-MAX_STEP, MAX_STEP)
-            sendMouse(stepX, stepY)
-            remainingX -= stepX
-            remainingY -= stepY
-        }
+        connectedSender()?.moveMouse(mouseButtons, dx, dy)
     }
 
     fun setMouseButton(mask: Int, down: Boolean) {
@@ -213,9 +206,5 @@ class HidController(
         val connected = sender
         if (connected == null) trace.note("report dropped: no Host connected")
         return connected
-    }
-
-    private companion object {
-        const val MAX_STEP = 127
     }
 }

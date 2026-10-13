@@ -5,20 +5,35 @@ package io.github.rahmanfaisal653.layboard.hid
  * declares, so tests can compare the declaration with the bytes the app really builds.
  */
 object HidDescriptorParser {
-    data class Declared(val inputBits: Map<Int, Int>, val outputBits: Map<Int, Int>, val featureBits: Map<Int, Int>)
+    /** [usages] holds every usage named, alone or in a range, as [usage] encodes it. */
+    data class Declared(
+        val inputBits: Map<Int, Int>,
+        val outputBits: Map<Int, Int>,
+        val featureBits: Map<Int, Int>,
+        val usages: Set<Int>,
+    )
 
     private const val TYPE_MAIN = 0
     private const val TYPE_GLOBAL = 1
+    private const val TYPE_LOCAL = 2
 
     private const val MAIN_INPUT = 0x8
     private const val MAIN_OUTPUT = 0x9
     private const val MAIN_FEATURE = 0xB
 
+    private const val GLOBAL_USAGE_PAGE = 0x0
     private const val GLOBAL_REPORT_SIZE = 0x7
     private const val GLOBAL_REPORT_ID = 0x8
     private const val GLOBAL_REPORT_COUNT = 0x9
 
+    private const val LOCAL_USAGE = 0x0
+    private const val LOCAL_USAGE_MINIMUM = 0x1
+    private const val LOCAL_USAGE_MAXIMUM = 0x2
+
     private const val LONG_ITEM = 0xFE
+
+    /** One number for a usage on a usage page, so usages from different pages never collide. */
+    fun usage(page: Int, id: Int): Int = (page shl 16) or id
 
     fun parse(descriptor: ByteArray): Declared {
         val input = HashMap<Int, Int>()
@@ -28,6 +43,9 @@ object HidDescriptorParser {
         var reportId = 0
         var reportSize = 0
         var reportCount = 0
+        val usages = HashSet<Int>()
+        var usagePage = 0
+        var usageMinimum = 0
 
         var i = 0
         while (i < descriptor.size) {
@@ -45,14 +63,20 @@ object HidDescriptorParser {
 
             when (type) {
                 TYPE_GLOBAL -> when (tag) {
+                    GLOBAL_USAGE_PAGE -> usagePage = value
                     GLOBAL_REPORT_SIZE -> reportSize = value
                     GLOBAL_REPORT_ID -> reportId = value
                     GLOBAL_REPORT_COUNT -> reportCount = value
+                }
+                TYPE_LOCAL -> when (tag) {
+                    LOCAL_USAGE -> usages += usage(usagePage, value)
+                    LOCAL_USAGE_MINIMUM -> usageMinimum = value
+                    LOCAL_USAGE_MAXIMUM -> (usageMinimum..value).forEach { usages += usage(usagePage, it) }
                 }
                 TYPE_MAIN -> bitsByMainTag[tag]?.merge(reportId, reportSize * reportCount, Int::plus)
             }
             i += 1 + dataSize
         }
-        return Declared(input, output, feature)
+        return Declared(input, output, feature, usages)
     }
 }

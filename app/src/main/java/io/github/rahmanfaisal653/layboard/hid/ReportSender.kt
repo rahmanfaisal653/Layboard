@@ -11,8 +11,18 @@ class ReportSender(
     private val scheduler: Scheduler,
     private val pauseMs: Long = DEFAULT_PAUSE_MS,
 ) {
-    /** A report waiting its turn; [releaseFollows] marks a key press, which must never go out without its release. */
-    private class Pending(val id: Int, val data: ByteArray, val releaseFollows: Boolean = false)
+    /**
+     * A report waiting its turn; [releaseFollows] marks a key press, which must never go out without its
+     * release, and [motion] a pointer move that later moves may still be merged into.
+     */
+    private class Pending(
+        val id: Int,
+        val data: ByteArray,
+        val releaseFollows: Boolean = false,
+        val motion: Motion? = null,
+    )
+
+    private class Motion(val buttons: Int, val dx: Int, val dy: Int)
 
     private val queue = ArrayDeque<Pending>()
 
@@ -29,8 +39,36 @@ class ReportSender(
         sendNext()
     }
 
+    /** Sends one mouse report as it is, e.g. a button change; [dx] and [dy] must be within one report's limit. */
     fun sendMouse(buttons: Int, dx: Int, dy: Int) {
         queue.addLast(Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, dx, dy)))
+        sendNext()
+    }
+
+    /**
+     * Moves the pointer by [dx], [dy] with [buttons] held. A move still waiting at the end of the queue
+     * with the same buttons absorbs it, so a burst made while the link rests goes out as one report; what
+     * does not fit in one report's limit follows in as many more as it needs. Nothing is lost on the way.
+     */
+    fun moveMouse(buttons: Int, dx: Int, dy: Int) {
+        var restX = dx
+        var restY = dy
+        val tail = queue.lastOrNull()?.motion
+        if (tail != null && tail.buttons == buttons) {
+            val mergedX = step(tail.dx + restX)
+            val mergedY = step(tail.dy + restY)
+            restX -= mergedX - tail.dx
+            restY -= mergedY - tail.dy
+            queue.removeLast()
+            if (mergedX != 0 || mergedY != 0) queue.addLast(motion(buttons, mergedX, mergedY))
+        }
+        while (restX != 0 || restY != 0) {
+            val stepX = step(restX)
+            val stepY = step(restY)
+            queue.addLast(motion(buttons, stepX, stepY))
+            restX -= stepX
+            restY -= stepY
+        }
         sendNext()
     }
 
@@ -45,6 +83,12 @@ class ReportSender(
         if (release != null) queue.addLast(release)
         if (dropped > 0) trace.note("dropped $dropped unsent reports")
     }
+
+    private fun motion(buttons: Int, dx: Int, dy: Int) =
+        Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, dx, dy), motion = Motion(buttons, dx, dy))
+
+    // As much of [distance] as one mouse report can carry.
+    private fun step(distance: Int) = distance.coerceIn(-MAX_STEP, MAX_STEP)
 
     private fun sendNext() {
         if (resting) return
@@ -61,5 +105,8 @@ class ReportSender(
     companion object {
         /** The pause between two reports, in milliseconds; the one value to tune if the link drops reports. */
         const val DEFAULT_PAUSE_MS = 10L
+
+        /** The furthest one mouse report can move the pointer on each axis, as the descriptor declares. */
+        const val MAX_STEP = 127
     }
 }
