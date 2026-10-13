@@ -50,10 +50,12 @@ class HidController(
     private var host: BluetoothDevice? = null
     private var mouseButtons = 0
     private var started = false
-    private val trace = StringBuilder()
+    // Reports go out through this while a Host is connected.
+    private var sender: ReportSender? = null
+    private val trace = HidTrace { Log.d(HidTrace.TAG, it) }
 
     /** Short log of what the Bluetooth stack answered, shown on the Status Screen for bug reports. */
-    val diagnostics: String get() = trace.toString().trim()
+    val diagnostics: String get() = trace.text
 
     // Keeps the proxy open: a slow Bluetooth service may still answer after the verdict.
     private val unsupportedTimeout = Runnable {
@@ -75,17 +77,52 @@ class HidController(
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     host = device
+                    sender = hid?.let { ReportSender(BluetoothHidGateway(it, device), trace) }
                     listener.onLinkChanged(device, Link.CONNECTED)
                 }
                 BluetoothProfile.STATE_CONNECTING ->
                     listener.onLinkChanged(device, Link.CONNECTING)
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    if (host?.address == device.address) host = null
+                    if (host?.address == device.address) {
+                        host = null
+                        sender = null
+                    }
                     mouseButtons = 0
                     listener.onLinkChanged(device, Link.DISCONNECTED)
                 }
             }
         }
+
+        // Every request a Host can make of a HID device gets an answer, not just connect and register.
+
+        override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
+            requestsFrom(device)?.onGetReport(type.toInt(), id.toInt() and 0xFF, bufferSize)
+        }
+
+        override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
+            requestsFrom(device)?.onSetReport(type.toInt(), id.toInt() and 0xFF, data)
+        }
+
+        override fun onSetProtocol(device: BluetoothDevice, protocol: Byte) {
+            requestsFrom(device)?.onSetProtocol(protocol.toInt())
+        }
+
+        override fun onInterruptData(device: BluetoothDevice, reportId: Byte, data: ByteArray) {
+            requestsFrom(device)?.onInterruptData(reportId.toInt() and 0xFF, data)
+        }
+
+        override fun onVirtualCableUnplug(device: BluetoothDevice) {
+            requestsFrom(device)?.onVirtualCableUnplug()
+        }
+    }
+
+    private fun requestsFrom(device: BluetoothDevice): HostRequests? {
+        val service = hid
+        if (service == null) {
+            note("host request ignored: HID service gone")
+            return null
+        }
+        return HostRequests(BluetoothHidGateway(service, device), trace)
     }
 
     private val serviceListener = object : BluetoothProfile.ServiceListener {
@@ -108,13 +145,15 @@ class HidController(
         }
 
         override fun onServiceDisconnected(profile: Int) {
-            if (profile == BluetoothProfile.HID_DEVICE) hid = null
+            if (profile != BluetoothProfile.HID_DEVICE) return
+            hid = null
+            sender = null
         }
     }
 
     fun start() {
         if (started) return
-        trace.setLength(0)
+        trace.clear()
         val bluetooth = adapter
         if (bluetooth == null) {
             note("no adapter")
@@ -140,14 +179,12 @@ class HidController(
         }
         hid = null
         host = null
+        sender = null
         mouseButtons = 0
         started = false
     }
 
-    private fun note(message: String) {
-        Log.d(TAG, message)
-        trace.append(message).append("; ")
-    }
+    private fun note(message: String) = trace.note(message)
 
     fun connect(device: BluetoothDevice) {
         hid?.connect(device)
@@ -159,8 +196,7 @@ class HidController(
 
     /** Presses and releases [usage] together with [modifiers]. */
     fun sendKey(modifiers: Int, usage: Int) {
-        sendKeyboard(modifiers, usage)
-        sendKeyboard(0, 0)
+        connectedSender()?.pressKey(modifiers, usage)
     }
 
     /** Presses and releases modifier keys on their own, e.g. a lone Win/Cmd key. */
@@ -183,18 +219,17 @@ class HidController(
         sendMouse(0, 0)
     }
 
-    private fun sendKeyboard(modifiers: Int, usage: Int) {
-        val target = host ?: return
-        hid?.sendReport(target, HidReports.ID_KEYBOARD, HidReports.keyboard(modifiers, usage))
+    private fun sendMouse(dx: Int, dy: Int) {
+        connectedSender()?.sendMouse(mouseButtons, dx, dy)
     }
 
-    private fun sendMouse(dx: Int, dy: Int) {
-        val target = host ?: return
-        hid?.sendReport(target, HidReports.ID_MOUSE, HidReports.mouse(mouseButtons, dx, dy))
+    private fun connectedSender(): ReportSender? {
+        val connected = sender
+        if (connected == null) note("report dropped: no Host connected")
+        return connected
     }
 
     private companion object {
-        const val TAG = "Layboard"
         const val MAX_STEP = 127
         const val UNSUPPORTED_TIMEOUT_MS = 10_000L
     }
