@@ -45,6 +45,7 @@ class HidController(
     private val adapter: BluetoothAdapter? =
         context.getSystemService(BluetoothManager::class.java)?.adapter
     private val handler = Handler(Looper.getMainLooper())
+    private val scheduler = HandlerScheduler(handler)
 
     private var hid: BluetoothHidDevice? = null
     private var host: BluetoothDevice? = null
@@ -77,7 +78,7 @@ class HidController(
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     host = device
-                    sender = hid?.let { ReportSender(BluetoothHidGateway(it, device), trace) }
+                    sender = hid?.let { ReportSender(BluetoothHidGateway(it, device), trace, scheduler) }
                     listener.onLinkChanged(device, Link.CONNECTED)
                 }
                 BluetoothProfile.STATE_CONNECTING ->
@@ -85,7 +86,7 @@ class HidController(
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     if (host?.address == device.address) {
                         host = null
-                        sender = null
+                        endReports()
                     }
                     mouseButtons = 0
                     listener.onLinkChanged(device, Link.DISCONNECTED)
@@ -147,7 +148,7 @@ class HidController(
         override fun onServiceDisconnected(profile: Int) {
             if (profile != BluetoothProfile.HID_DEVICE) return
             hid = null
-            sender = null
+            endReports()
         }
     }
 
@@ -179,7 +180,7 @@ class HidController(
         }
         hid = null
         host = null
-        sender = null
+        endReports()
         mouseButtons = 0
         started = false
     }
@@ -221,6 +222,12 @@ class HidController(
 
     private fun sendMouse(dx: Int, dy: Int) {
         connectedSender()?.sendMouse(mouseButtons, dx, dy)
+    }
+
+    // Reports still waiting are dropped; a key already pressed is still released, so none stays held.
+    private fun endReports() {
+        sender?.clear()
+        sender = null
     }
 
     private fun connectedSender(): ReportSender? {

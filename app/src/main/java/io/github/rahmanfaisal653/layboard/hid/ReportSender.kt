@@ -1,24 +1,63 @@
 package io.github.rahmanfaisal653.layboard.hid
 
 /**
- * Builds keyboard and mouse reports and sends them to the Host through [gateway], recording in
- * [trace] whether the stack accepted each one.
+ * Builds keyboard and mouse reports and sends them to the Host through [gateway], one at a time in
+ * the order they were made, with [pauseMs] between any two so the Bluetooth link never has to carry a
+ * burst. Every send is recorded in [trace]. Not thread-safe: use it from the one thread [scheduler] runs on.
  */
 class ReportSender(
     private val gateway: HidGateway,
     private val trace: HidTrace,
+    private val scheduler: Scheduler,
+    private val pauseMs: Long = DEFAULT_PAUSE_MS,
 ) {
+    /** A report waiting its turn; [releaseFollows] marks a key press, which must never go out without its release. */
+    private class Pending(val id: Int, val data: ByteArray, val releaseFollows: Boolean = false)
+
+    private val queue = ArrayDeque<Pending>()
+
+    // True from a key press going out until its release does.
+    private var held = false
+
+    // True while the pause after the last report is running.
+    private var resting = false
+
     /** Presses [usage] together with [modifiers], then releases everything. */
     fun pressKey(modifiers: Int, usage: Int) {
-        sendKeyboard(modifiers, usage)
-        sendKeyboard(0, 0)
+        queue.addLast(Pending(HidReports.ID_KEYBOARD, HidReports.keyboard(modifiers, usage), releaseFollows = true))
+        queue.addLast(Pending(HidReports.ID_KEYBOARD, HidReports.keyboard(0, 0)))
+        sendNext()
     }
 
-    private fun sendKeyboard(modifiers: Int, usage: Int) = send(HidReports.ID_KEYBOARD, HidReports.keyboard(modifiers, usage))
+    fun sendMouse(buttons: Int, dx: Int, dy: Int) {
+        queue.addLast(Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, dx, dy)))
+        sendNext()
+    }
 
-    fun sendMouse(buttons: Int, dx: Int, dy: Int) = send(HidReports.ID_MOUSE, HidReports.mouse(buttons, dx, dy))
+    /**
+     * Drops every report not yet sent. A key already pressed keeps its release, which still goes out
+     * after the usual pause, so nothing is left held on the Host.
+     */
+    fun clear() {
+        val release = if (held) queue.firstOrNull() else null
+        queue.clear()
+        if (release != null) queue.addLast(release)
+    }
 
-    private fun send(id: Int, data: ByteArray) {
-        trace.report(id, data, gateway.sendReport(id, data))
+    private fun sendNext() {
+        if (resting) return
+        val next = queue.removeFirstOrNull() ?: return
+        held = next.releaseFollows
+        trace.report(next.id, next.data, gateway.sendReport(next.id, next.data))
+        resting = true
+        scheduler.postDelayed(pauseMs) {
+            resting = false
+            sendNext()
+        }
+    }
+
+    companion object {
+        /** The pause between two reports, in milliseconds; the one value to tune if the link drops reports. */
+        const val DEFAULT_PAUSE_MS = 10L
     }
 }
