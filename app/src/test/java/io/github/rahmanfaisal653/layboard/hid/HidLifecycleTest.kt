@@ -240,6 +240,63 @@ class HidLifecycleTest {
         assertEquals(listOf(Outcome.Unsupported(UnsupportedReason.REGISTER_REFUSED)), listener.outcomes)
     }
 
+    @Test
+    fun aDisconnectTheStackNeverAnswersIsReportedAfterAGracePeriod() {
+        registerNormally()
+        lifecycle.onLink(host, Link.CONNECTED)
+
+        lifecycle.disconnect()
+        scheduler.advanceBy(1_000)
+
+        assertEquals(listOf(host), stack.disconnections)
+        assertEquals(Outcome.LinkChanged(host, Link.DISCONNECTED), listener.outcomes.last())
+    }
+
+    @Test
+    fun aDisconnectTheStackNeverAnswersRenewsTheRegistrationSoTheHostCanConnectAgain() {
+        registerNormally()
+        lifecycle.onLink(host, Link.CONNECTED)
+
+        lifecycle.disconnect()
+        scheduler.advanceBy(1_000)
+
+        assertEquals("the stuck registration is dropped", 1, stack.unregisterCalls)
+        assertEquals("and asked for again", 2, stack.profileRequests)
+
+        // The answer to that drop arrives once the new Registration is already under way.
+        lifecycle.onRegistration(false)
+        lifecycle.onProfileReady()
+        lifecycle.onRegistration(true)
+
+        assertTrue(listener.outcomes.none { it is Outcome.Unsupported })
+        assertEquals(2, listener.outcomes.count { it == Outcome.Registered })
+    }
+
+    @Test
+    fun aDisconnectAnsweredInTimeIsReportedOnce() {
+        registerNormally()
+        lifecycle.onLink(host, Link.CONNECTED)
+
+        lifecycle.disconnect()
+        lifecycle.onLink(host, Link.DISCONNECTED)
+        scheduler.advanceBy(1_000)
+
+        assertEquals(1, listener.outcomes.count { it == Outcome.LinkChanged(host, Link.DISCONNECTED) })
+    }
+
+    @Test
+    fun aHostThatReconnectsWithinTheGracePeriodStaysConnected() {
+        registerNormally()
+        lifecycle.onLink(host, Link.CONNECTED)
+
+        lifecycle.disconnect()
+        lifecycle.onLink(host, Link.DISCONNECTED)
+        lifecycle.onLink(host, Link.CONNECTED)
+        scheduler.advanceBy(1_000)
+
+        assertEquals(Outcome.LinkChanged(host, Link.CONNECTED), listener.outcomes.last())
+    }
+
     /** Drives the lifecycle through a normal Registration, leaving it ready for a Host. */
     private fun registerNormally() {
         lifecycle.start()

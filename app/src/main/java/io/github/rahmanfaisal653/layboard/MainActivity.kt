@@ -86,10 +86,19 @@ class MainActivity : Activity(), HidLifecycle.Listener<BluetoothDevice> {
         refresh()
     }
 
+    override fun onPause() {
+        // Android drops the Registration once Layboard can no longer be seen. If a Host is still
+        // connected then, realme's stack never finishes the drop and refuses every later
+        // Registration until Bluetooth restarts, so the Connection ends here, before onStop.
+        // Layboard's own dialogs only open without a Connection, so they lose nothing.
+        if (connectedHost != null) hid.disconnect()
+        super.onPause()
+    }
+
     override fun onStop() {
         unregisterReceiver(bluetoothEvents)
         inputScreen.leave()
-        // Android drops the HID registration in the background anyway; the Connection ends with it.
+        // Android drops the Registration in the background anyway; whatever is left of it ends here.
         hid.stop()
         connectedHost = null
         pendingHost = null

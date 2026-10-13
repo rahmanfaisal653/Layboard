@@ -35,6 +35,8 @@ class HidLifecycle<H>(
     private var started = false
     private var profileOpen = false
     private var connected: H? = null
+    // The Host a disconnect() was sent to, until the stack answers for it.
+    private var disconnecting: H? = null
     private var registerAttempt = 0
     private var pendingRelease = false
     private var startAfterRelease = false
@@ -128,7 +130,9 @@ class HidLifecycle<H>(
 
     /** A Host's link changed. A DISCONNECTED also finishes any release waiting on it. */
     fun onLink(host: H, link: Link) {
+        trace.note("link $link")
         if (link == Link.DISCONNECTED && pendingRelease) release()
+        if (host == disconnecting) disconnecting = null
         if (!started) return
         if (link == Link.CONNECTED) connected = host
         if (link == Link.DISCONNECTED && connected == host) connected = null
@@ -136,10 +140,28 @@ class HidLifecycle<H>(
     }
 
     /** Asks [host] to start the Connection. */
-    fun connect(host: H) = stack.connect(host)
+    fun connect(host: H) {
+        trace.note("connect requested")
+        stack.connect(host)
+    }
 
     /** Ends the Connection to the current Host. */
-    fun disconnect() = connected?.let { stack.disconnect(it) }
+    fun disconnect() {
+        val host = connected ?: return
+        stack.disconnect(host)
+        disconnecting = host
+        // Workaround 4: realme's stack drops the link but only ever reports it as disconnecting,
+        // and ignores every later connect until the Registration is renewed. Without an answer the
+        // link counts as down once the grace period is over, and the Registration starts afresh.
+        scheduler.postDelayed(DISCONNECT_GRACE_MS) {
+            if (disconnecting == host && connected == host) {
+                trace.note("no disconnect answer after ${DISCONNECT_GRACE_MS / 1000}s, registering afresh")
+                onLink(host, Link.DISCONNECTED)
+                stop()
+                start()
+            }
+        }
+    }
 
     fun stop() {
         registerAttempt = 0
@@ -148,6 +170,7 @@ class HidLifecycle<H>(
         val wasConnected = connected
         val wasOpen = profileOpen
         connected = null
+        disconnecting = null
         started = false
         stage = Stage.IDLE
         if (!wasOpen) return
@@ -166,7 +189,8 @@ class HidLifecycle<H>(
     private fun release() {
         pendingRelease = false
         profileOpen = false
-        stack.unregister()
+        // A start right after this one must not take the answer for a refusal.
+        if (stack.unregister()) expectedUnregisters++
         stack.closeProfile()
         if (startAfterRelease) {
             startAfterRelease = false

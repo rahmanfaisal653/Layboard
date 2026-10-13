@@ -12,7 +12,7 @@ A tiny Android app that turns your phone into a Bluetooth keyboard and mouse for
 - **Mouse**: slide a finger to move the pointer. It only moves; it never clicks or scrolls.
 - **Click Buttons**: separate left and right buttons.
 
-Tested hosts: _Linux — not yet; Windows — not yet; macOS — not yet._
+Tested hosts: _Linux — yes (Ubuntu); Windows — not yet; macOS — not yet._
 
 ## Using it
 
