@@ -31,6 +31,11 @@ android {
     }
 
     buildTypes {
+        // Installs beside the signed release build so iterating over adb never replaces it.
+        // The "Layboard (debug)" label lives in src/debug/res.
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
