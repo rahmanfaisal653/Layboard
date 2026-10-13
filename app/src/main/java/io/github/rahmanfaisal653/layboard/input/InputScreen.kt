@@ -4,15 +4,20 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.view.LayoutInflater
 import android.view.MotionEvent
+import android.os.Build
 import android.view.View
+import android.view.ViewTreeObserver
+import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import io.github.rahmanfaisal653.layboard.R
 import io.github.rahmanfaisal653.layboard.hid.HidController
 import io.github.rahmanfaisal653.layboard.hid.HidReports
+import io.github.rahmanfaisal653.layboard.hid.HidTrace
 import io.github.rahmanfaisal653.layboard.hid.KeyMap
 import io.github.rahmanfaisal653.layboard.keyboard.KeyboardCaptureView
 import io.github.rahmanfaisal653.layboard.keyboard.KeyboardSender
+import io.github.rahmanfaisal653.layboard.keyboard.TypedText
 import io.github.rahmanfaisal653.layboard.mouse.MouseAreaView
 
 /** The Keyboard, Mouse and Click Buttons, shown while a Connection is active. */
@@ -29,6 +34,17 @@ class InputScreen(
     private val capture: KeyboardCaptureView = view.findViewById(R.id.input_capture)
     private val sender = KeyboardSender(hid)
 
+    // The keyboard only attaches to a view in the focused window, which a fresh screen may not be yet.
+    private var waitingForFocus = false
+    private val showOnFocus = object : ViewTreeObserver.OnWindowFocusChangeListener {
+        override fun onWindowFocusChanged(hasFocus: Boolean) {
+            if (!hasFocus) return
+            waitingForFocus = false
+            capture.viewTreeObserver.removeOnWindowFocusChangeListener(this)
+            if (capture.isAttachedToWindow) showKeyboard()
+        }
+    }
+
     private val modifierButtons = mapOf(
         R.id.key_ctrl to HidReports.MOD_CTRL,
         R.id.key_alt to HidReports.MOD_ALT,
@@ -36,7 +52,7 @@ class InputScreen(
     )
 
     init {
-        capture.sender = sender
+        capture.typing = TypedText(sender::press, hid::note)
         mouse.onMove = { dx, dy -> hid.moveMouse(dx, dy) }
 
         view.findViewById<View>(R.id.input_keyboard).setOnClickListener { showKeyboard() }
@@ -79,9 +95,26 @@ class InputScreen(
         mouse.speed = pointerSpeed
     }
 
+    /** Opens the Phone's keyboard on the capture target, waiting for window focus if it has none yet. */
     fun showKeyboard() {
         capture.requestFocus()
-        inputMethods.showSoftInput(capture, 0)
+        if (!capture.hasWindowFocus()) {
+            if (!waitingForFocus) {
+                waitingForFocus = true
+                capture.viewTreeObserver.addOnWindowFocusChangeListener(showOnFocus)
+            }
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Waits for the keyboard to attach to the newly focused view instead of failing when it has not yet.
+            capture.windowInsetsController?.show(WindowInsets.Type.ime())
+            hid.note("keyboard open requested")
+            return
+        }
+        val shown = inputMethods.showSoftInput(capture, 0)
+        hid.note("keyboard open ${HidTrace.verdict(shown)}")
+        // Right after a screen swap the keyboard may not serve the capture target yet; try once more.
+        if (!shown) capture.post { inputMethods.showSoftInput(capture, 0) }
     }
 
     fun hideKeyboard() {

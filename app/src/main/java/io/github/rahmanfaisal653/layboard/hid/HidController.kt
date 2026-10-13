@@ -148,6 +148,9 @@ class HidController(
     /** Short log of what the Bluetooth stack answered, shown on the Status Screen for bug reports. */
     val diagnostics: String get() = trace.text
 
+    /** Adds [message] to the same trace as the Bluetooth stack's answers, e.g. what the Phone keyboard did. */
+    fun note(message: String) = trace.note(message)
+
     fun start() = lifecycle.start()
 
     fun stop() {

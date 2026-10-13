@@ -20,7 +20,8 @@ class KeyboardCaptureView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
 ) : View(context, attrs) {
 
-    var sender: KeyboardSender? = null
+    /** Where the keyboard's typing goes; set by the Input Screen. */
+    var typing: TypedText? = null
 
     init {
         isFocusable = true
@@ -38,57 +39,51 @@ class KeyboardCaptureView @JvmOverloads constructor(
             EditorInfo.IME_FLAG_NO_EXTRACT_UI or
             EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING or
             EditorInfo.IME_ACTION_NONE
+        typing?.attached()
         return Connection(this)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val key = keyFor(event) ?: return super.onKeyDown(keyCode, event)
-        sender?.press(key)
+        typing?.key(key)
         return true
     }
 
+    /** Forwards the keyboard's edits to [typing] and keeps the field itself empty. */
     private inner class Connection(view: View) : BaseInputConnection(view, false) {
-        /** Text the keyboard still treats as editable; kept so corrections can be diffed. */
-        private var composing = ""
-
         override fun commitText(text: CharSequence, newCursorPosition: Int): Boolean {
-            replaceComposing(text.toString())
-            composing = ""
+            typing?.commit(text)
             return true
         }
 
         override fun setComposingText(text: CharSequence, newCursorPosition: Int): Boolean {
-            val next = text.toString()
-            replaceComposing(next)
-            composing = next
+            typing?.compose(text)
             return true
         }
 
         override fun finishComposingText(): Boolean {
-            composing = ""
+            typing?.finishComposing()
             return true
         }
 
         override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
-            repeat(beforeLength) { sender?.backspace() }
+            typing?.deleteBefore(beforeLength)
+            return true
+        }
+
+        override fun deleteSurroundingTextInCodePoints(beforeLength: Int, afterLength: Int): Boolean {
+            typing?.deleteBefore(beforeLength)
             return true
         }
 
         override fun performEditorAction(actionCode: Int): Boolean {
-            sender?.press(KeyMap.ENTER)
+            typing?.key(Key(KeyMap.ENTER))
             return true
         }
 
         override fun sendKeyEvent(event: KeyEvent): Boolean {
-            if (event.action == KeyEvent.ACTION_DOWN) keyFor(event)?.let { sender?.press(it) }
+            if (event.action == KeyEvent.ACTION_DOWN) typing?.key(keyFor(event))
             return true
-        }
-
-        /** Types only what differs between the composing text already sent and [next]. */
-        private fun replaceComposing(next: String) {
-            val common = composing.commonPrefixWith(next).length
-            repeat(composing.length - common) { sender?.backspace() }
-            for (i in common until next.length) sender?.type(next[i])
         }
     }
 

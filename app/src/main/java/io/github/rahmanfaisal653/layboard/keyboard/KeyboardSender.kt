@@ -2,7 +2,6 @@ package io.github.rahmanfaisal653.layboard.keyboard
 
 import io.github.rahmanfaisal653.layboard.hid.HidController
 import io.github.rahmanfaisal653.layboard.hid.Key
-import io.github.rahmanfaisal653.layboard.hid.KeyMap
 
 /**
  * Sends keys to the Host. Ctrl, Alt and Win are "armed" first and then applied to the next key,
@@ -20,10 +19,6 @@ class KeyboardSender(private val hid: HidController) {
 
     fun tapModifier(modifier: Int) = hid.sendModifierTap(modifier)
 
-    fun type(c: Char) {
-        KeyMap.fromChar(c)?.let { press(it) }
-    }
-
     fun press(key: Key) {
         hid.sendKey(key.modifiers or armedModifiers, key.usage)
         if (armedModifiers != 0) {
@@ -34,9 +29,5 @@ class KeyboardSender(private val hid: HidController) {
 
     fun press(usage: Int) {
         press(Key(usage))
-    }
-
-    fun backspace() {
-        press(KeyMap.BACKSPACE)
     }
 }
