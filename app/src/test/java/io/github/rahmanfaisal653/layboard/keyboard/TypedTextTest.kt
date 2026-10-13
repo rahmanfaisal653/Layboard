@@ -9,8 +9,13 @@ import org.junit.Test
 
 class TypedTextTest {
     private val pressed = mutableListOf<Key>()
+    private val corrections = mutableListOf<Key>()
     private val notes = mutableListOf<String>()
-    private val typing = TypedText(pressed::add, notes::add)
+    private val typing = TypedText(
+        press = pressed::add,
+        correct = { corrections += it; pressed += it },
+        note = notes::add,
+    )
 
     private val backspace = Key(KeyMap.BACKSPACE)
 
@@ -44,6 +49,21 @@ class TypedTextTest {
         typing.commit("the ")
 
         assertEquals(listOf(backspace, backspace) + keysOf("he "), pressed)
+    }
+
+    @Test
+    fun backspacesFromACorrectionAreSentAsCorrectionsNotAsTheNextKey() {
+        typing.compose("teh")
+        typing.compose("the")
+
+        assertEquals(listOf(backspace, backspace), corrections)
+    }
+
+    @Test
+    fun backspacesTheKeyboardAsksForAreKeys() {
+        typing.deleteBefore(1)
+
+        assertTrue(corrections.isEmpty())
     }
 
     @Test

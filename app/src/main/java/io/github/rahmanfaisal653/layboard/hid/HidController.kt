@@ -167,9 +167,6 @@ class HidController(
         connectedSender()?.pressKey(modifiers, usage)
     }
 
-    /** Presses and releases modifier keys on their own, e.g. a lone Win/Cmd key. */
-    fun sendModifierTap(modifiers: Int) = sendKey(modifiers, 0)
-
     /** Moves the Host pointer by any amount; [ReportSender] merges and splits it into reports the link carries. */
     fun moveMouse(dx: Int, dy: Int) {
         connectedSender()?.moveMouse(dx, dy)

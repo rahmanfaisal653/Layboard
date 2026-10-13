@@ -32,7 +32,7 @@ class InputScreen(
     private val hostName: TextView = view.findViewById(R.id.input_host_name)
     private val mouse: MouseAreaView = view.findViewById(R.id.input_mouse)
     private val capture: KeyboardCaptureView = view.findViewById(R.id.input_capture)
-    private val sender = KeyboardSender(hid)
+    private val sender = KeyboardSender(hid::sendKey, hid::setClickButton)
 
     // The keyboard only attaches to a view in the focused window, which a fresh screen may not be yet.
     private var waitingForFocus = false
@@ -52,7 +52,7 @@ class InputScreen(
     )
 
     init {
-        capture.typing = TypedText(sender::press, hid::note)
+        capture.typing = TypedText(sender::press, sender::correct, hid::note)
         mouse.onMove = { dx, dy -> hid.moveMouse(dx, dy) }
 
         view.findViewById<View>(R.id.input_keyboard).setOnClickListener { showKeyboard() }
@@ -80,7 +80,7 @@ class InputScreen(
         }
         // A long press on Win sends it alone, e.g. to open the Start menu.
         view.findViewById<View>(R.id.key_win).setOnLongClickListener {
-            sender.tapModifier(HidReports.MOD_GUI)
+            sender.tapWin()
             true
         }
         sender.onArmedChanged = { armed ->
@@ -117,8 +117,14 @@ class InputScreen(
         if (!shown) capture.post { inputMethods.showSoftInput(capture, 0) }
     }
 
-    fun hideKeyboard() {
+    private fun hideKeyboard() {
         view.windowToken?.let { inputMethods.hideSoftInputFromWindow(it, 0) }
+    }
+
+    /** Another screen replaces this one, as when the Connection ends: closes the keyboard and clears any Armed modifier. */
+    fun leave() {
+        hideKeyboard()
+        sender.disarm()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -127,11 +133,11 @@ class InputScreen(
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     button.isPressed = true
-                    hid.setClickButton(mask, true)
+                    sender.click(mask, true)
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     button.isPressed = false
-                    hid.setClickButton(mask, false)
+                    sender.click(mask, false)
                 }
             }
             true

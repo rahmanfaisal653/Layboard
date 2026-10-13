@@ -9,13 +9,15 @@ import io.github.rahmanfaisal653.layboard.hid.KeyMap
  * A keyboard may rewrite the word being typed ("composing text") before it is final. Only the
  * difference from what was already sent goes out: Backspace for each character that changed, then
  * the new characters. Characters with no US key are skipped, and remembered as skipped, so a later
- * correction never backspaces over a character the Host did not get.
+ * correction never backspaces over a character the Host did not get. Those Backspaces go to
+ * [correct], not [press]: they fix text already sent rather than being a key the user pressed.
  *
  * Every event is also [note]d, by size rather than content to keep the trace short, so the trace
  * shows whether the keyboard is talking to Layboard at all.
  */
 class TypedText(
     private val press: (Key) -> Unit,
+    private val correct: (Key) -> Unit,
     private val note: (String) -> Unit,
 ) {
     /** The composing text as the Host received it: only the characters that had a US key. */
@@ -62,7 +64,7 @@ class TypedText(
     private fun replaceSent(text: CharSequence) {
         val next = text.mapNotNull(KeyMap::fromChar)
         val common = sent.zip(next).takeWhile { (old, new) -> old == new }.size
-        repeat(sent.size - common) { press(BACKSPACE) }
+        repeat(sent.size - common) { correct(BACKSPACE) }
         next.drop(common).forEach(press)
         sent = next
     }

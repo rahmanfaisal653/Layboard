@@ -195,13 +195,13 @@ class MainActivity : Activity(), HidLifecycle.Listener<BluetoothDevice> {
     }
 
     private fun showStatus(title: Int, body: Int, action: Int?, onAction: (() -> Unit)?, detail: String? = null) {
-        inputScreen.hideKeyboard()
+        inputScreen.leave()
         statusScreen.bind(title, body, action, onAction, detail)
         show(statusScreen.view)
     }
 
     private fun showHosts() {
-        inputScreen.hideKeyboard()
+        inputScreen.leave()
         hostsScreen.bind(pairedHosts(), notice)
         show(hostsScreen.view)
     }
