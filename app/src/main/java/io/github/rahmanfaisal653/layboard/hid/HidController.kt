@@ -15,6 +15,11 @@ import android.util.Log
 /**
  * Presents the Phone as a Bluetooth HID keyboard + mouse and sends reports to the connected Host.
  *
+ * This is the thin Android edge of the HID stack: it turns [BluetoothHidDevice] callbacks into
+ * [HidLifecycle] events and [HidLifecycle]'s stack calls back into the platform. The Registration and
+ * Connection lifecycle itself — including the vendor-specific workarounds that used to live here — is
+ * [HidLifecycle], so it is exercised without Android.
+ *
  * The caller must hold the Bluetooth permission and have Bluetooth enabled before [start].
  * Registration only lasts while the app is in the foreground, so call [start] in onStart and
  * [stop] in onStop.
@@ -22,78 +27,47 @@ import android.util.Log
 @SuppressLint("MissingPermission")
 class HidController(
     appContext: Context,
-    private val listener: Listener,
+    listener: HidLifecycle.Listener<BluetoothDevice>,
 ) {
     // The proxy must outlive any single Activity instance.
     private val context: Context = appContext.applicationContext
-
-    enum class Link { DISCONNECTED, CONNECTING, CONNECTED }
-
-    /** Why the Phone could not act as a HID device; shown to help diagnose unsupported phones. */
-    enum class UnsupportedReason { NO_BLUETOOTH, PROFILE_REFUSED, NO_RESPONSE, REGISTER_REFUSED }
-
-    interface Listener {
-        /** The Phone's Bluetooth stack cannot act as a HID device. */
-        fun onUnsupported(reason: UnsupportedReason)
-
-        /** The Phone is advertised as a keyboard + mouse and can connect to Hosts. */
-        fun onRegistered()
-
-        fun onLinkChanged(host: BluetoothDevice, link: Link)
-    }
-
     private val adapter: BluetoothAdapter? =
         context.getSystemService(BluetoothManager::class.java)?.adapter
     private val handler = Handler(Looper.getMainLooper())
     private val scheduler = HandlerScheduler(handler)
-
-    private var hid: BluetoothHidDevice? = null
-    private var host: BluetoothDevice? = null
-    private var mouseButtons = 0
-    private var started = false
-    // Reports go out through this while a Host is connected.
-    private var sender: ReportSender? = null
     private val trace = HidTrace { Log.d(HidTrace.TAG, it) }
 
-    /** Short log of what the Bluetooth stack answered, shown on the Status Screen for bug reports. */
-    val diagnostics: String get() = trace.text
-
-    // Keeps the proxy open: a slow Bluetooth service may still answer after the verdict.
-    private val unsupportedTimeout = Runnable {
-        note("service silent after ${UNSUPPORTED_TIMEOUT_MS / 1000}s")
-        listener.onUnsupported(UnsupportedReason.NO_RESPONSE)
-    }
+    private var hid: BluetoothHidDevice? = null
+    // Reports go out through this while a Host is connected.
+    private var sender: ReportSender? = null
+    private var senderHost: BluetoothDevice? = null
+    private var mouseButtons = 0
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
-            note("app registered=$registered")
-            if (registered) {
-                listener.onRegistered()
-            } else if (started) {
-                listener.onUnsupported(UnsupportedReason.REGISTER_REFUSED)
-            }
+            lifecycle.onRegistration(registered)
         }
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     // A repeated CONNECTED for the same Host keeps its sender, so reports have one pause clock.
-                    if (host?.address != device.address) endReports()
-                    host = device
+                    if (senderHost?.address != device.address) endReports()
+                    senderHost = device
                     if (sender == null) {
                         sender = hid?.let { ReportSender(BluetoothHidGateway(it, device), trace, scheduler) }
                     }
-                    listener.onLinkChanged(device, Link.CONNECTED)
+                    lifecycle.onLink(device, HidLifecycle.Link.CONNECTED)
                 }
                 BluetoothProfile.STATE_CONNECTING ->
-                    listener.onLinkChanged(device, Link.CONNECTING)
+                    lifecycle.onLink(device, HidLifecycle.Link.CONNECTING)
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    if (host?.address == device.address) {
-                        host = null
+                    if (senderHost?.address == device.address) {
+                        senderHost = null
                         endReports()
                     }
                     mouseButtons = 0
-                    listener.onLinkChanged(device, Link.DISCONNECTED)
+                    lifecycle.onLink(device, HidLifecycle.Link.DISCONNECTED)
                 }
             }
         }
@@ -121,32 +95,11 @@ class HidController(
         }
     }
 
-    private fun requestsFrom(device: BluetoothDevice): HostRequests? {
-        val service = hid
-        if (service == null) {
-            note("host request ignored: HID service gone")
-            return null
-        }
-        return HostRequests(BluetoothHidGateway(service, device), trace)
-    }
-
-    private val serviceListener = object : BluetoothProfile.ServiceListener {
+    private val serviceListener: BluetoothProfile.ServiceListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
             if (profile != BluetoothProfile.HID_DEVICE) return
-            note("service up")
-            handler.removeCallbacks(unsupportedTimeout)
-            val device = proxy as BluetoothHidDevice
-            hid = device
-            val sdp = BluetoothHidDeviceAppSdpSettings(
-                "Layboard",
-                "Phone keyboard and mouse",
-                "Layboard",
-                BluetoothHidDevice.SUBCLASS1_COMBO,
-                HidReports.DESCRIPTOR,
-            )
-            val sent = device.registerApp(sdp, null, null, context.mainExecutor, callback)
-            note("register sent=$sent")
-            if (!sent) listener.onUnsupported(UnsupportedReason.REGISTER_REFUSED)
+            hid = proxy as BluetoothHidDevice
+            lifecycle.onProfileReady()
         }
 
         override fun onServiceDisconnected(profile: Int) {
@@ -156,48 +109,58 @@ class HidController(
         }
     }
 
-    fun start() {
-        if (started) return
-        trace.clear()
-        val bluetooth = adapter
-        if (bluetooth == null) {
-            note("no adapter")
-            listener.onUnsupported(UnsupportedReason.NO_BLUETOOTH)
-            return
+    // The platform calls HidLifecycle drives; the fake in tests stands in for this.
+    private val stack: HidStack<BluetoothDevice> = object : HidStack<BluetoothDevice> {
+        override val hasAdapter: Boolean get() = adapter != null
+
+        override fun requestProfile(): Boolean =
+            adapter?.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE) == true
+
+        override fun register(): Boolean {
+            val device = hid ?: return false
+            val sdp = BluetoothHidDeviceAppSdpSettings(
+                "Layboard",
+                "Phone keyboard and mouse",
+                "Layboard",
+                BluetoothHidDevice.SUBCLASS1_COMBO,
+                HidReports.DESCRIPTOR,
+            )
+            return device.registerApp(sdp, null, null, context.mainExecutor, callback)
         }
-        val requested = bluetooth.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)
-        note("proxy requested=$requested")
-        if (!requested) {
-            listener.onUnsupported(UnsupportedReason.PROFILE_REFUSED)
-            return
+
+        override fun unregister(): Boolean = hid?.unregisterApp() == true
+
+        override fun closeProfile() {
+            adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, hid)
         }
-        started = true
-        // Some vendor stacks never answer when the HID Device service is missing.
-        handler.postDelayed(unsupportedTimeout, UNSUPPORTED_TIMEOUT_MS)
+
+        override fun connect(host: BluetoothDevice) {
+            hid?.connect(host)
+        }
+
+        override fun disconnect(host: BluetoothDevice) {
+            hid?.disconnect(host)
+        }
     }
+
+    private val lifecycle: HidLifecycle<BluetoothDevice> = HidLifecycle(stack, scheduler, trace, listener)
+
+    /** Short log of what the Bluetooth stack answered, shown on the Status Screen for bug reports. */
+    val diagnostics: String get() = trace.text
+
+    fun start() = lifecycle.start()
 
     fun stop() {
-        handler.removeCallbacks(unsupportedTimeout)
-        hid?.let {
-            it.unregisterApp()
-            adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it)
-        }
-        hid = null
-        host = null
         endReports()
         mouseButtons = 0
-        started = false
+        lifecycle.stop()
     }
 
-    private fun note(message: String) = trace.note(message)
+    /** Asks [device] to start the Connection. */
+    fun connect(device: BluetoothDevice) = lifecycle.connect(device)
 
-    fun connect(device: BluetoothDevice) {
-        hid?.connect(device)
-    }
-
-    fun disconnect() {
-        host?.let { hid?.disconnect(it) }
-    }
+    /** Ends the Connection to the current Host. */
+    fun disconnect() = lifecycle.disconnect()
 
     /** Presses and releases [usage] together with [modifiers]. */
     fun sendKey(modifiers: Int, usage: Int) {
@@ -224,6 +187,15 @@ class HidController(
         sendMouse(0, 0)
     }
 
+    private fun requestsFrom(device: BluetoothDevice): HostRequests? {
+        val service = hid
+        if (service == null) {
+            trace.note("host request ignored: HID service gone")
+            return null
+        }
+        return HostRequests(BluetoothHidGateway(service, device), trace)
+    }
+
     private fun sendMouse(dx: Int, dy: Int) {
         connectedSender()?.sendMouse(mouseButtons, dx, dy)
     }
@@ -236,12 +208,11 @@ class HidController(
 
     private fun connectedSender(): ReportSender? {
         val connected = sender
-        if (connected == null) note("report dropped: no Host connected")
+        if (connected == null) trace.note("report dropped: no Host connected")
         return connected
     }
 
     private companion object {
         const val MAX_STEP = 127
-        const val UNSUPPORTED_TIMEOUT_MS = 10_000L
     }
 }

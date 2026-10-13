@@ -20,6 +20,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.widget.FrameLayout
 import io.github.rahmanfaisal653.layboard.hid.HidController
+import io.github.rahmanfaisal653.layboard.hid.HidLifecycle
 import io.github.rahmanfaisal653.layboard.hosts.HostsScreen
 import io.github.rahmanfaisal653.layboard.input.InputScreen
 import io.github.rahmanfaisal653.layboard.status.StatusScreen
@@ -29,7 +30,7 @@ import io.github.rahmanfaisal653.layboard.status.StatusScreen
  * Status when something blocks use, Input while connected, Hosts otherwise.
  */
 @SuppressLint("MissingPermission")
-class MainActivity : Activity(), HidController.Listener {
+class MainActivity : Activity(), HidLifecycle.Listener<BluetoothDevice> {
 
     private lateinit var prefs: Prefs
     private lateinit var hid: HidController
@@ -43,7 +44,7 @@ class MainActivity : Activity(), HidController.Listener {
     }
 
     private var unsupported = false
-    private var unsupportedReason: HidController.UnsupportedReason? = null
+    private var unsupportedReason: HidLifecycle.UnsupportedReason? = null
     private var unsupportedDetail: String? = null
     private var permissionPermanentlyDenied = false
     private var autoConnectTried = false
@@ -105,9 +106,9 @@ class MainActivity : Activity(), HidController.Listener {
         refresh()
     }
 
-    // HidController.Listener
+    // HidLifecycle.Listener
 
-    override fun onUnsupported(reason: HidController.UnsupportedReason) {
+    override fun onUnsupported(reason: HidLifecycle.UnsupportedReason) {
         unsupported = true
         unsupportedReason = reason
         unsupportedDetail = listOf(
@@ -116,7 +117,7 @@ class MainActivity : Activity(), HidController.Listener {
             "${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}",
         ).filter { it.isNotEmpty() }.joinToString("\n")
         // A silent service keeps its proxy open so a late answer can still recover.
-        if (reason != HidController.UnsupportedReason.NO_RESPONSE) hid.stop()
+        if (reason != HidLifecycle.UnsupportedReason.NO_RESPONSE) hid.stop()
         refresh()
     }
 
@@ -131,16 +132,16 @@ class MainActivity : Activity(), HidController.Listener {
         pairedHosts().firstOrNull { it.address == address }?.let(::connectTo)
     }
 
-    override fun onLinkChanged(host: BluetoothDevice, link: HidController.Link) {
+    override fun onLinkChanged(host: BluetoothDevice, link: HidLifecycle.Link) {
         when (link) {
-            HidController.Link.CONNECTING -> notice = getString(R.string.connecting, nameOf(host))
-            HidController.Link.CONNECTED -> {
+            HidLifecycle.Link.CONNECTING -> notice = getString(R.string.connecting, nameOf(host))
+            HidLifecycle.Link.CONNECTED -> {
                 connectedHost = host
                 pendingHost = null
                 prefs.lastHostAddress = host.address
                 notice = null
             }
-            HidController.Link.DISCONNECTED -> {
+            HidLifecycle.Link.DISCONNECTED -> {
                 notice = when {
                     connectedHost?.address == host.address -> getString(R.string.disconnected)
                     pendingHost?.address == host.address -> getString(R.string.could_not_connect, nameOf(host))
@@ -158,7 +159,7 @@ class MainActivity : Activity(), HidController.Listener {
     private fun refresh() {
         val adapter = bluetooth
         if (adapter == null || unsupported) {
-            val busy = unsupportedReason == HidController.UnsupportedReason.REGISTER_REFUSED
+            val busy = unsupportedReason == HidLifecycle.UnsupportedReason.REGISTER_REFUSED
             showStatus(
                 if (busy) R.string.status_busy_title else R.string.status_unsupported_title,
                 if (busy) R.string.status_busy_body else R.string.status_unsupported_body,
