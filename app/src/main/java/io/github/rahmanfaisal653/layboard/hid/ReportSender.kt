@@ -38,6 +38,9 @@ class ReportSender(
     // True while the pause after the last report is running.
     private var resting = false
 
+    // Waits for the releases a clear() kept to go out.
+    private var onReleasesSent: (() -> Unit)? = null
+
     /** Presses [usage] together with [modifiers], then releases everything. */
     fun pressKey(modifiers: Int, usage: Int) {
         queue.addLast(Pending(HidReports.ID_KEYBOARD, HidReports.keyboard(modifiers, usage), releaseFollows = true))
@@ -88,9 +91,11 @@ class ReportSender(
     /**
      * Drops every report not yet sent, and says so in the trace. A key already pressed keeps its
      * release, and a Click Button held on the Host gets one; they go out as soon as any pause
-     * still running ends, so nothing is left held on the Host.
+     * still running ends, so nothing is left held on the Host. [whenReleased] runs once, one pause
+     * after the last of them, or at once when nothing needs releasing and the link is quiet: the
+     * moment the link can be closed without cutting a release off.
      */
-    fun clear() {
+    fun clear(whenReleased: () -> Unit = {}) {
         val release = if (keyHeld) queue.firstOrNull() else null
         val dropped = queue.size - (if (release != null) 1 else 0)
         queue.clear()
@@ -98,7 +103,19 @@ class ReportSender(
         buttons = 0
         if (buttonsOnHost != 0) queue.addLast(buttonChange(0))
         if (dropped > 0) trace.note("dropped $dropped unsent reports")
+        val earlier = onReleasesSent
+        onReleasesSent = { earlier?.invoke(); whenReleased() }
         sendNext()
+    }
+
+    /**
+     * Like [clear], but sends the releases at once, without the pauses, and forgets any earlier
+     * whenReleased: for when the caller closes the Connection straight after and cannot wait.
+     */
+    fun clearNow() {
+        clear()
+        onReleasesSent = null
+        while (true) send(queue.removeFirstOrNull() ?: break)
     }
 
     private fun buttonChange(buttons: Int) =
@@ -112,15 +129,26 @@ class ReportSender(
 
     private fun sendNext() {
         if (resting) return
-        val next = queue.removeFirstOrNull() ?: return
-        keyHeld = next.releaseFollows
-        next.buttons?.let { buttonsOnHost = it }
-        trace.report(next.id, next.data, gateway.sendReport(next.id, next.data))
+        val next = queue.removeFirstOrNull()
+        if (next == null) {
+            onReleasesSent?.let {
+                onReleasesSent = null
+                it()
+            }
+            return
+        }
+        send(next)
         resting = true
         scheduler.postDelayed(pauseMs) {
             resting = false
             sendNext()
         }
+    }
+
+    private fun send(report: Pending) {
+        keyHeld = report.releaseFollows
+        report.buttons?.let { buttonsOnHost = it }
+        trace.report(report.id, report.data, gateway.sendReport(report.id, report.data))
     }
 
     companion object {

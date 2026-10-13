@@ -454,6 +454,95 @@ class ReportSenderTest {
     }
 
     @Test
+    fun theConnectionClosesOnlyAfterEveryReleaseHasGoneOut() {
+        var sentWhenClosed: List<Call>? = null
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        settle()
+        sender.pressKey(HidReports.MOD_CTRL, 0x06)
+
+        sender.clear { sentWhenClosed = gateway.calls.toList() }
+        assertEquals("closed while a release was still waiting", null, sentWhenClosed)
+        settle()
+
+        assertEquals(
+            listOf(mouse(HidReports.BUTTON_LEFT, 0, 0), press(0x06, modifiers = 0x01), release, mouse(0, 0, 0)),
+            sentWhenClosed,
+        )
+    }
+
+    @Test
+    fun theConnectionClosesOnePauseAfterTheLastRelease() {
+        var closedAt: Long? = null
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        settle()
+
+        sender.clear { closedAt = scheduler.now }
+        settle()
+
+        assertEquals(gateway.times.last() + ReportSender.DEFAULT_PAUSE_MS, closedAt)
+    }
+
+    @Test
+    fun withNothingHeldAndNothingSendingTheConnectionClosesAtOnce() {
+        var closed = false
+        sender.pressKey(0, 0x04)
+        settle()
+
+        sender.clear { closed = true }
+
+        assertTrue(closed)
+    }
+
+    @Test
+    fun theConnectionIsClosedOnlyOnce() {
+        var closes = 0
+        sender.pressKey(0, 0x04)
+        sender.clear { closes++ }
+        settle()
+        sender.pressKey(0, 0x05)
+        settle()
+
+        assertEquals(1, closes)
+    }
+
+    @Test
+    fun clearingNowSendsEveryReleaseAtOnceWithoutThePauses() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        settle()
+        sender.pressKey(0, 0x04)
+
+        sender.clearNow()
+
+        assertEquals(listOf(mouse(HidReports.BUTTON_LEFT, 0, 0), press(0x04), release, mouse(0, 0, 0)), gateway.calls)
+        assertEquals(1, gateway.times.drop(1).distinct().size)
+    }
+
+    @Test
+    fun clearingNowForgetsAnEarlierCloseBecauseTheCallerClosesItself() {
+        var closed = false
+        sender.pressKey(0, 0x04)
+        sender.clear { closed = true }
+
+        sender.clearNow()
+        settle()
+
+        assertEquals(listOf(press(0x04), release), gateway.calls)
+        assertFalse(closed)
+    }
+
+    @Test
+    fun aDropWhileLeftIsHeldReleasesItEvenIfTheHostNoLongerAnswers() {
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        settle()
+        gateway.accepts = false
+
+        sender.clear()
+        settle()
+
+        assertEquals(mouse(0, 0, 0), gateway.calls.last())
+    }
+
+    @Test
     fun keysAndMouseMovesKeepTheOrderTheyWereMadeIn() {
         sender.pressKey(0, 0x04)
         sender.moveMouse(3, 4)

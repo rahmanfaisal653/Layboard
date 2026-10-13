@@ -41,6 +41,8 @@ class HidController(
     // Reports go out through this while a Host is connected.
     private var sender: ReportSender? = null
     private var senderHost: BluetoothDevice? = null
+    // The sender of a Connection the Disconnect button is ending, until its releases are out.
+    private var releasing: ReportSender? = null
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
@@ -152,15 +154,33 @@ class HidController(
     fun start() = lifecycle.start()
 
     fun stop() {
-        endReports()
+        // Registration ends now, so the releases go out at once instead of waiting their pauses.
+        listOfNotNull(sender, releasing).forEach { it.clearNow() }
+        sender = null
+        releasing = null
         lifecycle.stop()
     }
 
     /** Asks [device] to start the Connection. */
     fun connect(device: BluetoothDevice) = lifecycle.connect(device)
 
-    /** Ends the Connection to the current Host. */
-    fun disconnect() = lifecycle.disconnect()
+    /** Ends the Connection to the current Host once its releases are out, so nothing is left held on it. */
+    fun disconnect() {
+        if (releasing != null) return
+        val ending = sender
+        if (ending == null) {
+            lifecycle.disconnect()
+            return
+        }
+        val host = senderHost
+        sender = null
+        releasing = ending
+        ending.clear {
+            releasing = null
+            // The Host may have dropped the Connection itself meanwhile.
+            if (senderHost == host) lifecycle.disconnect()
+        }
+    }
 
     /** Presses and releases [usage] together with [modifiers]. */
     fun sendKey(modifiers: Int, usage: Int) {

@@ -88,6 +88,7 @@ class MainActivity : Activity(), HidLifecycle.Listener<BluetoothDevice> {
 
     override fun onStop() {
         unregisterReceiver(bluetoothEvents)
+        inputScreen.leave()
         // Android drops the HID registration in the background anyway; the Connection ends with it.
         hid.stop()
         connectedHost = null

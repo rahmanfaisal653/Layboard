@@ -51,6 +51,11 @@ class InputScreen(
         R.id.key_win to HidReports.MOD_GUI,
     )
 
+    private val clickButtons = mapOf(
+        R.id.click_left to HidReports.BUTTON_LEFT,
+        R.id.click_right to HidReports.BUTTON_RIGHT,
+    )
+
     init {
         capture.typing = TypedText(sender::press, sender::correct, hid::note)
         mouse.onMove = { dx, dy -> hid.moveMouse(dx, dy) }
@@ -61,8 +66,7 @@ class InputScreen(
             onDisconnect()
         }
 
-        bindClickButton(R.id.click_left, HidReports.BUTTON_LEFT)
-        bindClickButton(R.id.click_right, HidReports.BUTTON_RIGHT)
+        clickButtons.forEach { (id, mask) -> bindClickButton(id, mask) }
 
         mapOf(
             R.id.key_esc to KeyMap.ESCAPE,
@@ -121,10 +125,14 @@ class InputScreen(
         view.windowToken?.let { inputMethods.hideSoftInputFromWindow(it, 0) }
     }
 
-    /** Another screen replaces this one, as when the Connection ends: closes the keyboard and clears any Armed modifier. */
+    /**
+     * Another screen replaces this one, as when the Connection ends: closes the keyboard, clears any Armed
+     * modifier and lets go of the Click Buttons, so the next Connection starts with nothing armed or held.
+     */
     fun leave() {
         hideKeyboard()
         sender.disarm()
+        clickButtons.keys.forEach { view.findViewById<View>(it).isPressed = false }
     }
 
     @SuppressLint("ClickableViewAccessibility")
