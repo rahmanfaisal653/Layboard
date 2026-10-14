@@ -8,8 +8,8 @@ A tiny Android app that turns your phone into a Bluetooth keyboard and mouse for
 
 ## Features
 
-- **Keyboard**: your phone's normal keyboard, plus Esc, Tab, Ctrl, Alt, Win and arrow keys. These keys work like a real keyboard's: hold Ctrl, Alt or Win while tapping another key or clicking to send shortcuts such as Ctrl+C, Alt+Tab or Ctrl+click, and hold an arrow to repeat it. Layout is US QWERTY; the computer's own layout decides which character appears.
-- **Mouse**: slide a finger to move the pointer. It only moves; it never clicks or scrolls.
+- **Keyboard**: your phone's normal keyboard, plus Esc, Tab, Ctrl, Alt, Win and arrow keys. These keys work like a real keyboard's: hold Ctrl, Alt or Win while tapping another key or clicking to send shortcuts such as Ctrl+C, Alt+Tab or Ctrl+click, and hold an arrow to repeat it. A button left of **Keyboard** hides or shows these keys; they are shown again on every new connection. Layout is US QWERTY; the computer's own layout decides which character appears.
+- **Mouse**: slide one finger to move the pointer, or two fingers to scroll up, down, left and right like a touchpad (fingers up scroll the content up). Scrolling is smooth where the computer supports it, keeps gliding after a quick flick and stops when you touch the Mouse again. **Scroll Speed** is a slider under Pointer Speed on the Hosts Screen. Tapping never clicks.
 - **Click Buttons**: separate left and right buttons.
 
 Tested hosts: _Linux — yes (Ubuntu); Windows — not yet; macOS — not yet._
@@ -22,6 +22,8 @@ Tested hosts: _Linux — yes (Ubuntu); Windows — not yet; macOS — not yet._
 4. Tap the computer in the list to connect. Layboard reconnects to the last host on launch.
 
 The connection only exists while Layboard is open on screen; this is how Android's Bluetooth HID API works. The pairing itself stays on both devices.
+
+**Updating from before 0.2.0:** scrolling adds a wheel to the mouse the computer sees, so an already paired computer has to forget the phone in its Bluetooth settings and pair again once (**Pair new host**). Until then it keeps the old mouse and scrolling does nothing.
 
 Some phones do not ship the Bluetooth HID Device service. Layboard tells you when that is the case.
 
