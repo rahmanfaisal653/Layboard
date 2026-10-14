@@ -14,7 +14,8 @@ import org.junit.Test
 class HostRequestsTest {
     private val gateway = FakeHidGateway()
     private val trace = HidTrace()
-    private val requests = HostRequests(gateway, trace)
+    private val resolution = ScrollResolution()
+    private val requests = HostRequests(gateway, trace, resolution)
 
     private fun zeros(count: Int): List<Byte> = List(count) { 0 }
 
@@ -54,6 +55,57 @@ class HostRequestsTest {
     }
 
     @Test
+    fun hostAskingForTheScrollResolutionGetsWhatItLastSet() {
+        requests.onGetReport(type = 3, id = HidReports.ID_MOUSE, bufferSize = 0)
+        requests.onSetReport(type = 3, id = HidReports.ID_MOUSE, data = byteArrayOf(0b0101))
+        gateway.calls.clear()
+        requests.onGetReport(type = 3, id = HidReports.ID_MOUSE, bufferSize = 0)
+
+        assertEquals(listOf(Call.Reply(3, HidReports.ID_MOUSE, listOf<Byte>(0b0101))), gateway.calls)
+    }
+
+    @Test
+    fun hostAskingForTheScrollResolutionBeforeSettingItIsToldPlainSteps() {
+        requests.onGetReport(type = 3, id = HidReports.ID_MOUSE, bufferSize = 0)
+
+        assertEquals(listOf(Call.Reply(3, HidReports.ID_MOUSE, listOf<Byte>(0))), gateway.calls)
+    }
+
+    @Test
+    fun hostSwitchingHighResolutionScrollingOnGetsSuccessAndIsAnswered() {
+        requests.onSetReport(type = 3, id = HidReports.ID_MOUSE, data = byteArrayOf(0b0101))
+
+        assertEquals(listOf(Call.Error(0)), gateway.calls)
+        assertTrue(resolution.wheelHighRes && resolution.panHighRes)
+    }
+
+    @Test
+    fun hostSwitchingHighResolutionScrollingOffGetsSuccessAndIsAnswered() {
+        resolution.apply(byteArrayOf(0b0101))
+
+        requests.onSetReport(type = 3, id = HidReports.ID_MOUSE, data = byteArrayOf(0))
+
+        assertEquals(listOf(Call.Error(0)), gateway.calls)
+        assertTrue(!resolution.wheelHighRes && !resolution.panHighRes)
+    }
+
+    @Test
+    fun hostSettingTheScrollResolutionToAValueOutOfRangeGetsAnInvalidParameterError() {
+        requests.onSetReport(type = 3, id = HidReports.ID_MOUSE, data = byteArrayOf(0b0010))
+
+        assertEquals(listOf(Call.Error(4)), gateway.calls)
+        assertTrue(!resolution.wheelHighRes && !resolution.panHighRes)
+    }
+
+    @Test
+    fun hostSettingAnOutputReportOnTheMouseIdStillGetsAnInvalidReportIdError() {
+        requests.onSetReport(type = 2, id = HidReports.ID_MOUSE, data = byteArrayOf(0b0101))
+
+        assertEquals(listOf(Call.Error(2)), gateway.calls)
+        assertTrue(!resolution.wheelHighRes)
+    }
+
+    @Test
     fun hostSwitchingToReportProtocolGetsSuccess() {
         requests.onSetProtocol(protocol = 1)
 
@@ -85,7 +137,7 @@ class HostRequestsTest {
     @Test
     fun eachRequestAndItsAnswerAreRecordedInTheTrace() {
         requests.onGetReport(type = 1, id = HidReports.ID_KEYBOARD, bufferSize = 0)
-        requests.onSetReport(type = 2, id = HidReports.ID_KEYBOARD, data = byteArrayOf(1))
+        requests.onSetReport(type = 3, id = HidReports.ID_MOUSE, data = byteArrayOf(1))
         requests.onSetProtocol(protocol = 1)
         requests.onInterruptData(id = HidReports.ID_KEYBOARD, data = byteArrayOf(1))
 

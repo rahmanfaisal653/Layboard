@@ -10,7 +10,11 @@ class ReportSenderTest {
     private val scheduler = FakeScheduler()
     private val gateway = FakeHidGateway { scheduler.now }
     private val trace = HidTrace()
-    private val sender = ReportSender(gateway, trace, scheduler)
+    private val resolution = ScrollResolution()
+    private val sender = ReportSender(gateway, trace, scheduler, resolution = resolution)
+
+    /** The Host has switched high-resolution scrolling on for the wheel and the pan. */
+    private fun highResolution() = resolution.apply(byteArrayOf(0b0101))
 
     private fun bytes(vararg values: Int): List<Byte> = values.map { it.toByte() }
 
@@ -745,7 +749,8 @@ class ReportSenderTest {
     }
 
     @Test
-    fun scrollingSendsTheWheelAndPanSteps() {
+    fun scrollingInHighResolutionSendsTheWheelAndPanUnitsAsTheyAre() {
+        highResolution()
         sender.scrollMouse(3, -2)
         settle()
 
@@ -753,7 +758,8 @@ class ReportSenderTest {
     }
 
     @Test
-    fun scrollStepsMadeWhileTheLinkRestsGoOutAsOneReport() {
+    fun scrollUnitsMadeWhileTheLinkRestsGoOutAsOneReport() {
+        highResolution()
         sender.scrollMouse(1, 0) // goes out at once
         sender.scrollMouse(1, 2)
         sender.scrollMouse(2, -1)
@@ -764,7 +770,8 @@ class ReportSenderTest {
     }
 
     @Test
-    fun scrollStepsBeyondOneReportsLimitFollowInMoreReportsAndNoneIsLost() {
+    fun scrollUnitsBeyondOneReportsLimitFollowInMoreReportsAndNoneIsLost() {
+        highResolution()
         sender.scrollMouse(1, 0) // goes out at once
         sender.scrollMouse(100, 0)
         sender.scrollMouse(100, -300)
@@ -777,7 +784,8 @@ class ReportSenderTest {
     }
 
     @Test
-    fun scrollStepsThatCancelOutSendNothingMore() {
+    fun scrollUnitsThatCancelOutSendNothingMore() {
+        highResolution()
         sender.scrollMouse(1, 0) // goes out at once
         sender.scrollMouse(5, -2)
         sender.scrollMouse(-5, 2)
@@ -788,6 +796,7 @@ class ReportSenderTest {
 
     @Test
     fun aScrollAndAPointerMoveWaitingTogetherGoOutInOneReport() {
+        highResolution()
         sender.moveMouse(1, 0) // goes out at once
         sender.moveMouse(2, 3)
         sender.scrollMouse(4, 5)
@@ -798,6 +807,7 @@ class ReportSenderTest {
 
     @Test
     fun scrollingCarriesTheClickButtonsHeldSoCtrlAndDragStayHeldThroughIt() {
+        highResolution()
         sender.holdKey(ctrl)
         sender.setClickButton(HidReports.BUTTON_LEFT, true)
         sender.scrollMouse(2, 0)
@@ -811,6 +821,7 @@ class ReportSenderTest {
 
     @Test
     fun scrollingNeverReleasesAHeldSpecialKey() {
+        highResolution()
         sender.holdKey(ctrl)
         gateway.clear()
 
@@ -822,7 +833,8 @@ class ReportSenderTest {
     }
 
     @Test
-    fun scrollStepsAreMergedOnlyIntoMovesMadeWithTheSameButtonsHeld() {
+    fun scrollUnitsAreMergedOnlyIntoMovesMadeWithTheSameButtonsHeld() {
+        highResolution()
         sender.scrollMouse(1, 0) // goes out at once
         sender.scrollMouse(2, 0)
         sender.setClickButton(HidReports.BUTTON_LEFT, true)
@@ -837,7 +849,67 @@ class ReportSenderTest {
 
     @Test
     fun aScrollOfNothingSendsNothing() {
+        highResolution()
         sender.scrollMouse(0, 0)
+        settle()
+
+        assertTrue(gateway.calls.isEmpty())
+    }
+
+    @Test
+    fun withoutHighResolutionEightUnitsMakeOneWheelStepAndOneAnotherPanStep() {
+        sender.scrollMouse(8, -16)
+        settle()
+
+        assertEquals(listOf(mouse(0, 0, 0, 1, -2)), gateway.calls)
+    }
+
+    @Test
+    fun withoutHighResolutionLessThanAStepWaitsUntilMoreUnitsMakeOne() {
+        sender.scrollMouse(3, -3)
+        settle()
+        assertTrue(gateway.calls.isEmpty())
+
+        sender.scrollMouse(3, -3)
+        sender.scrollMouse(2, -2)
+        settle()
+
+        assertEquals(listOf(mouse(0, 0, 0, 1, -1)), gateway.calls)
+    }
+
+    @Test
+    fun withoutHighResolutionNoDriftBuildsUpOverManySmallScrolls() {
+        repeat(100) { sender.scrollMouse(1, 0) }
+        settle()
+
+        assertEquals(12, gateway.calls.filterIsInstance<Call.Report>().sumOf { it.data[3].toInt() })
+    }
+
+    @Test
+    fun withoutHighResolutionLeftoverUnitsOfTheSameDirectionAddUpToAStep() {
+        sender.scrollMouse(-5, 0)
+        sender.scrollMouse(-5, 0)
+        settle()
+
+        assertEquals(listOf(mouse(0, 0, 0, -1, 0)), gateway.calls)
+    }
+
+    @Test
+    fun highResolutionCanBeSwitchedOnForTheWheelAloneAndThePanStaysInPlainSteps() {
+        resolution.apply(byteArrayOf(0b0001))
+
+        sender.scrollMouse(3, 9)
+        settle()
+
+        assertEquals(listOf(mouse(0, 0, 0, 3, 1)), gateway.calls)
+    }
+
+    @Test
+    fun clearingForgetsTheLeftoverOfAScrollInPlainSteps() {
+        sender.scrollMouse(5, 5)
+        sender.clear()
+
+        sender.scrollMouse(5, 5)
         settle()
 
         assertTrue(gateway.calls.isEmpty())

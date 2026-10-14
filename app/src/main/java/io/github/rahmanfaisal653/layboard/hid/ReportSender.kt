@@ -3,13 +3,14 @@ package io.github.rahmanfaisal653.layboard.hid
 /**
  * Builds keyboard and mouse reports and sends them to the Host through [gateway], one at a time in
  * the order they were made, with [pauseMs] between any two so the Bluetooth link never has to carry a
- * burst. Every send is recorded in [trace]. Not thread-safe: use it from the one thread [scheduler] runs on.
+ * burst. Every send is recorded in [trace]. Scrolling follows what the Host set in [resolution]. Not thread-safe: use it from the one thread [scheduler] runs on.
  */
 class ReportSender(
     private val gateway: HidGateway,
     private val trace: HidTrace,
     private val scheduler: Scheduler,
     private val pauseMs: Long = DEFAULT_PAUSE_MS,
+    private val resolution: ScrollResolution = ScrollResolution(),
 ) {
     /**
      * A report waiting its turn; [holdsKeys] says whether a keyboard report leaves any key down on the
@@ -36,6 +37,10 @@ class ReportSender(
     // The Click Buttons as last asked for, and as the last mouse report sent left them on the Host.
     private var buttons = 0
     private var buttonsOnHost = 0
+
+    // Scroll units not yet sent on an axis in plain steps, less than a step each.
+    private var wheelLeftover = 0
+    private var panLeftover = 0
 
     // True while the pause after the last report is running.
     private var resting = false
@@ -90,10 +95,19 @@ class ReportSender(
     fun moveMouse(dx: Int, dy: Int) = addMotion(dx, dy, 0, 0)
 
     /**
-     * Scrolls the Host by [wheel] steps vertically and [pan] steps horizontally (a positive wheel scrolls
-     * up, a positive pan right), with the Click Buttons held now. Merged and split like [moveMouse].
+     * Scrolls the Host by [wheel] units vertically and [pan] units horizontally (a positive wheel scrolls
+     * up, a positive pan right), [HidReports.SCROLL_UNITS_PER_STEP] to a step, with the Click Buttons held
+     * now. An axis the Host switched to high resolution gets the units as they are; one still in plain steps
+     * gets whole steps, with what is less than a step carried to the next scroll. Merged and split like
+     * [moveMouse].
      */
-    fun scrollMouse(wheel: Int, pan: Int) = addMotion(0, 0, wheel, pan)
+    fun scrollMouse(wheel: Int, pan: Int) {
+        val (wheelSent, wheelKept) = scrolled(wheel, wheelLeftover, resolution.wheelHighRes)
+        val (panSent, panKept) = scrolled(pan, panLeftover, resolution.panHighRes)
+        wheelLeftover = wheelKept
+        panLeftover = panKept
+        addMotion(0, 0, wheelSent, panSent)
+    }
 
     /**
      * Drops every report not yet sent, and says so in the trace, and forgets the held keys. A key or
@@ -108,6 +122,8 @@ class ReportSender(
         held.clear()
         if (keysOnHost) queue.addLast(keys(0, emptyList()))
         buttons = 0
+        wheelLeftover = 0
+        panLeftover = 0
         if (buttonsOnHost != 0) queue.addLast(buttonChange(0))
         if (dropped > 0) trace.note("dropped $dropped unsent reports")
         val earlier = onReleasesSent
@@ -184,6 +200,14 @@ class ReportSender(
         buttons = buttons,
         motion = Motion(buttons, dx, dy, wheel, pan),
     )
+
+    // What to send and what to carry on for [units] of scroll after [leftover], in plain steps or in units.
+    private fun scrolled(units: Int, leftover: Int, highRes: Boolean): Pair<Int, Int> {
+        if (highRes) return units to 0
+        val total = leftover + units
+        val steps = total / HidReports.SCROLL_UNITS_PER_STEP
+        return steps to total - steps * HidReports.SCROLL_UNITS_PER_STEP
+    }
 
     // As much of [distance] as one mouse report can carry on any one axis.
     private fun step(distance: Int) = distance.coerceIn(-MAX_STEP, MAX_STEP)

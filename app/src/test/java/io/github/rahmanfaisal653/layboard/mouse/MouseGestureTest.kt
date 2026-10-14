@@ -118,12 +118,12 @@ class MouseGestureTest {
     }
 
     @Test
-    fun smallScrollMovesAddUpToWholeStepsWithoutDrifting() {
+    fun smallScrollMovesAddUpToWholeUnitsWithoutDrifting() {
         gesture.update(listOf(at(0f, 0f), at(10f, 0f)))
         repeat(100) { n -> gesture.update(listOf(at(0f, (n + 1).toFloat()), at(10f, (n + 1).toFloat()))) }
 
         // 100 dp of travel at the fixed scroll speed.
-        assertEquals((100 * MouseGesture.SCROLL_STEPS_PER_DP).toInt(), scrolledBy().first)
+        assertEquals((100 * MouseGesture.SCROLL_UNITS_PER_DP).toInt(), scrolledBy().first)
     }
 
     @Test

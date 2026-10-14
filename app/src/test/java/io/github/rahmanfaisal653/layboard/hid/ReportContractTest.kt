@@ -53,15 +53,32 @@ class ReportContractTest {
     }
 
     @Test
-    fun descriptorDeclaresNoOutputOrFeatureReports() {
+    fun descriptorDeclaresNoOutputReports() {
         assertTrue(declared.outputBits.isEmpty())
-        assertTrue(declared.featureBits.isEmpty())
+    }
+
+    @Test
+    fun theOnlyFeatureReportIsTheScrollResolutionOneByteOnTheMouseReportId() {
+        assertEquals(mapOf(HidReports.ID_MOUSE to 8), declared.featureBits)
+        assertEquals(ScrollResolution.REPORT_SIZE, declared.featureBits.getValue(HidReports.ID_MOUSE) / 8)
+        assertEquals(ScrollResolution.REPORT_SIZE, ScrollResolution().featureReport().size)
+    }
+
+    @Test
+    fun theWheelAndThePanEachOfferHighResolutionAtEightTimesThePlainStep() {
+        assertTrue(RESOLUTION_MULTIPLIER in declared.usages)
+        assertEquals(
+            listOf(1 to HidReports.SCROLL_UNITS_PER_STEP, 1 to HidReports.SCROLL_UNITS_PER_STEP),
+            declared.featureRanges,
+        )
+        assertEquals(8, HidReports.SCROLL_UNITS_PER_STEP)
     }
 
     private companion object {
         val GENERIC_DESKTOP_X = HidDescriptorParser.usage(0x01, 0x30)
         val GENERIC_DESKTOP_Y = HidDescriptorParser.usage(0x01, 0x31)
         val GENERIC_DESKTOP_WHEEL = HidDescriptorParser.usage(0x01, 0x38)
+        val RESOLUTION_MULTIPLIER = HidDescriptorParser.usage(0x01, 0x48)
         val CONSUMER_AC_PAN = HidDescriptorParser.usage(0x0C, 0x238)
     }
 }

@@ -38,6 +38,9 @@ class HidController(
     private val trace = HidTrace { Log.d(HidTrace.TAG, it) }
 
     private var hid: BluetoothHidDevice? = null
+    // What the connected Host set for scrolling; back to plain steps when a Connection ends, never when one
+    // begins, so a Host setting it as the link comes up is not undone.
+    private val scrollResolution = ScrollResolution()
     // Reports go out through this while a Host is connected.
     private var sender: ReportSender? = null
     private var senderHost: BluetoothDevice? = null
@@ -56,7 +59,9 @@ class HidController(
                     if (senderHost?.address != device.address) endReports()
                     senderHost = device
                     if (sender == null) {
-                        sender = hid?.let { ReportSender(BluetoothHidGateway(it, device), trace, scheduler) }
+                        sender = hid?.let {
+                            ReportSender(BluetoothHidGateway(it, device), trace, scheduler, resolution = scrollResolution)
+                        }
                     }
                     lifecycle.onLink(device, HidLifecycle.Link.CONNECTED)
                 }
@@ -158,6 +163,7 @@ class HidController(
         listOfNotNull(sender, releasing).forEach { it.clearNow() }
         sender = null
         releasing = null
+        scrollResolution.reset()
         lifecycle.stop()
     }
 
@@ -202,7 +208,7 @@ class HidController(
         connectedSender()?.moveMouse(dx, dy)
     }
 
-    /** Scrolls the Host by wheel and pan steps; merged and split into reports like [moveMouse], with held Click Buttons carried. */
+    /** Scrolls the Host by wheel and pan units, [HidReports.SCROLL_UNITS_PER_STEP] to a step; merged and split into reports like [moveMouse], with held Click Buttons carried. */
     fun scrollMouse(wheel: Int, pan: Int) {
         connectedSender()?.scrollMouse(wheel, pan)
     }
@@ -218,13 +224,14 @@ class HidController(
             trace.note("host request ignored: HID service gone")
             return null
         }
-        return HostRequests(BluetoothHidGateway(service, device), trace)
+        return HostRequests(BluetoothHidGateway(service, device), trace, scrollResolution)
     }
 
     // Reports still waiting are dropped; a key or Click Button held on the Host is still released, so none stays held.
     private fun endReports() {
         sender?.clear()
         sender = null
+        scrollResolution.reset()
     }
 
     private fun connectedSender(): ReportSender? {

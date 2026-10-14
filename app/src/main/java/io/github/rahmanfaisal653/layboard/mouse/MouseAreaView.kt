@@ -21,7 +21,7 @@ class MouseAreaView @JvmOverloads constructor(
     /** Receives whole-pixel pointer deltas for the Host. */
     var onMove: ((dx: Int, dy: Int) -> Unit)? = null
 
-    /** Receives whole wheel and pan steps for the Host. */
+    /** Receives whole scroll units for the Host, as [MouseGesture] does. */
     var onScroll: ((wheel: Int, pan: Int) -> Unit)? = null
 
     private val gesture = MouseGesture(

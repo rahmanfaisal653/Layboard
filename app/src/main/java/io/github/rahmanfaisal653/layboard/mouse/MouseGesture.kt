@@ -1,5 +1,7 @@
 package io.github.rahmanfaisal653.layboard.mouse
 
+import io.github.rahmanfaisal653.layboard.hid.HidReports
+
 /**
  * Turns the fingers on the Mouse into pointer moves and scrolls, like a touchpad: one finger moves the
  * pointer, two or more scroll by the travel of their middle. The mode follows the number of fingers
@@ -13,11 +15,11 @@ class MouseGesture(
     density: Float,
     /** Receives whole-pixel pointer deltas for the Host. */
     private val onMove: (dx: Int, dy: Int) -> Unit,
-    /** Receives whole wheel and pan steps for the Host. */
+    /** Receives whole scroll units for the Host, [HidReports.SCROLL_UNITS_PER_STEP] to a wheel or pan step. */
     private val onScroll: (wheel: Int, pan: Int) -> Unit,
 ) {
     private val pointer = PointerMotion(density)
-    private val scroll = PointerMotion(density, SCROLL_STEPS_PER_DP)
+    private val scroll = PointerMotion(density, SCROLL_UNITS_PER_DP)
 
     /** Pointer Speed multiplier; see [PointerMotion.speed]. */
     var pointerSpeed: Float
@@ -52,7 +54,7 @@ class MouseGesture(
     }
 
     companion object {
-        /** Wheel steps per dp of two-finger travel; fixed until Scroll Speed arrives. */
-        const val SCROLL_STEPS_PER_DP = 0.1f
+        /** Scroll units per dp of two-finger travel, a tenth of a step; fixed until Scroll Speed arrives. */
+        const val SCROLL_UNITS_PER_DP = 0.1f * HidReports.SCROLL_UNITS_PER_STEP
     }
 }

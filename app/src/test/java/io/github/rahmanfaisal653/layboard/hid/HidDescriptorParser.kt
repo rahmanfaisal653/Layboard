@@ -11,6 +11,8 @@ object HidDescriptorParser {
         val outputBits: Map<Int, Int>,
         val featureBits: Map<Int, Int>,
         val usages: Set<Int>,
+        /** The physical minimum and maximum in force at each variable (not padding) Feature item, in order. */
+        val featureRanges: List<Pair<Int, Int>>,
     )
 
     private const val TYPE_MAIN = 0
@@ -22,6 +24,8 @@ object HidDescriptorParser {
     private const val MAIN_FEATURE = 0xB
 
     private const val GLOBAL_USAGE_PAGE = 0x0
+    private const val GLOBAL_PHYSICAL_MINIMUM = 0x3
+    private const val GLOBAL_PHYSICAL_MAXIMUM = 0x4
     private const val GLOBAL_REPORT_SIZE = 0x7
     private const val GLOBAL_REPORT_ID = 0x8
     private const val GLOBAL_REPORT_COUNT = 0x9
@@ -29,6 +33,8 @@ object HidDescriptorParser {
     private const val LOCAL_USAGE = 0x0
     private const val LOCAL_USAGE_MINIMUM = 0x1
     private const val LOCAL_USAGE_MAXIMUM = 0x2
+
+    private const val MAIN_CONSTANT = 0x1
 
     private const val LONG_ITEM = 0xFE
 
@@ -46,6 +52,9 @@ object HidDescriptorParser {
         val usages = HashSet<Int>()
         var usagePage = 0
         var usageMinimum = 0
+        var physicalMinimum = 0
+        var physicalMaximum = 0
+        val featureRanges = ArrayList<Pair<Int, Int>>()
 
         var i = 0
         while (i < descriptor.size) {
@@ -64,6 +73,8 @@ object HidDescriptorParser {
             when (type) {
                 TYPE_GLOBAL -> when (tag) {
                     GLOBAL_USAGE_PAGE -> usagePage = value
+                    GLOBAL_PHYSICAL_MINIMUM -> physicalMinimum = value
+                    GLOBAL_PHYSICAL_MAXIMUM -> physicalMaximum = value
                     GLOBAL_REPORT_SIZE -> reportSize = value
                     GLOBAL_REPORT_ID -> reportId = value
                     GLOBAL_REPORT_COUNT -> reportCount = value
@@ -73,10 +84,13 @@ object HidDescriptorParser {
                     LOCAL_USAGE_MINIMUM -> usageMinimum = value
                     LOCAL_USAGE_MAXIMUM -> (usageMinimum..value).forEach { usages += usage(usagePage, it) }
                 }
-                TYPE_MAIN -> bitsByMainTag[tag]?.merge(reportId, reportSize * reportCount, Int::plus)
+                TYPE_MAIN -> {
+                    bitsByMainTag[tag]?.merge(reportId, reportSize * reportCount, Int::plus)
+                    if (tag == MAIN_FEATURE && value and MAIN_CONSTANT == 0) featureRanges += physicalMinimum to physicalMaximum
+                }
             }
             i += 1 + dataSize
         }
-        return Declared(input, output, feature, usages)
+        return Declared(input, output, feature, usages, featureRanges)
     }
 }
