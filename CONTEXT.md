@@ -31,25 +31,25 @@ _Avoid_: Session, pairing (a Pairing outlives a Connection)
 ## Input
 
 **Keyboard**:
-The Phone's standard Android on-screen keyboard, whose typing is forwarded to the Host, plus a small row of special keys (Esc, Tab, Ctrl, Alt, Win/Cmd, arrows).
+The Phone's standard Android on-screen keyboard, whose typing is forwarded to the Host, plus the Special Keys.
 _Avoid_: IME, keypad
 
 **Mouse**:
-The on-screen area that only moves the Host's pointer. It never clicks and never scrolls.
+The on-screen area that moves the Host's pointer with one finger and scrolls on the Host with two, like a touchpad, with the scroll gliding briefly after the fingers lift. It never clicks, not even on a tap.
 _Avoid_: Touchpad, trackpad, pointer pad
 
 **Click Buttons**:
 The left and right on-screen buttons that click on the Host. They are separate from the Mouse; a button held down while the Mouse moves drags.
 _Avoid_: Tap, mouse buttons
 
-**Armed modifier**:
-A Ctrl, Alt or Win key that was tapped and is waiting, shown lit, to be applied to the next Keyboard key and then cleared. Clicking does not use or clear it, and a Connection ending does.
-_Avoid_: Sticky key, toggled key
+**Special Keys**:
+The on-screen Esc, Tab, Ctrl, Alt, Win/Cmd and arrow keys. Each is held on the Host for as long as a finger holds it, like a real key, so Ctrl is held while another key is pressed and a held arrow repeats.
+_Avoid_: Extra keys, armed modifier, sticky key, toggled key
 
 ## Screens
 
 **Hosts Screen**:
-The starting screen while no Connection exists. It lists the paired Hosts, offers "Pair new host", holds the Pointer Speed slider, and shows a one-line notice such as "Disconnected" when a Connection ends.
+The starting screen while no Connection exists. It lists the paired Hosts, offers "Pair new host", holds the Pointer Speed and Scroll Speed sliders, and shows a one-line notice such as "Disconnected" when a Connection ends.
 _Avoid_: Home, device list, main screen
 
 **Input Screen**:
@@ -63,3 +63,7 @@ _Avoid_: Error dialog, banner, popup
 **Pointer Speed**:
 How far the Host's pointer moves per finger travel on the Mouse, set by one slider on the Hosts Screen and remembered.
 _Avoid_: Sensitivity, DPI
+
+**Scroll Speed**:
+How far the Host scrolls per two-finger travel on the Mouse, set by its own slider on the Hosts Screen next to Pointer Speed and remembered.
+_Avoid_: Wheel speed, sensitivity

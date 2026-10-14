@@ -12,14 +12,14 @@ class ReportSender(
     private val pauseMs: Long = DEFAULT_PAUSE_MS,
 ) {
     /**
-     * A report waiting its turn; [releaseFollows] marks a key press, which must never go out without its
-     * release, [buttons] the Click Buttons a mouse report holds, and [motion] a pointer move that later
+     * A report waiting its turn; [holdsKeys] says whether a keyboard report leaves any key down on the
+     * Host, [buttons] the Click Buttons a mouse report holds, and [motion] a pointer move that later
      * moves may still be merged into.
      */
     private class Pending(
         val id: Int,
         val data: ByteArray,
-        val releaseFollows: Boolean = false,
+        val holdsKeys: Boolean? = null,
         val buttons: Int? = null,
         val motion: Motion? = null,
     )
@@ -28,8 +28,10 @@ class ReportSender(
 
     private val queue = ArrayDeque<Pending>()
 
-    // True from a key press going out until its release does.
-    private var keyHeld = false
+    // The Special Keys held now, in the order they went down, and whether the last keyboard report sent
+    // left any key down on the Host.
+    private val held = mutableListOf<Key>()
+    private var keysOnHost = false
 
     // The Click Buttons as last asked for, and as the last mouse report sent left them on the Host.
     private var buttons = 0
@@ -41,11 +43,30 @@ class ReportSender(
     // Waits for the releases a clear() kept to go out.
     private var onReleasesSent: (() -> Unit)? = null
 
-    /** Presses [usage] together with [modifiers], then releases everything. */
+    /**
+     * Presses [usage] together with [modifiers] and whatever Special Keys are held, then lets go of
+     * [usage] and [modifiers] again, leaving the held keys down: Ctrl held while typing c is Ctrl+C.
+     */
     fun pressKey(modifiers: Int, usage: Int) {
-        queue.addLast(Pending(HidReports.ID_KEYBOARD, HidReports.keyboard(modifiers, usage), releaseFollows = true))
-        queue.addLast(Pending(HidReports.ID_KEYBOARD, HidReports.keyboard(0, 0)))
-        sendNext()
+        queue.addLast(keys(heldModifiers() or modifiers, heldUsages() + usage))
+        sendHeld()
+    }
+
+    /**
+     * Holds [key] down on the Host until [releaseKey], as a finger holds a key on a real keyboard, so
+     * later keys and clicks reach the Host with it held and a held arrow repeats there. A key already
+     * held sends nothing.
+     */
+    fun holdKey(key: Key) {
+        if (key in held) return
+        held += key
+        sendHeld()
+    }
+
+    /** Lets go of [key] held by [holdKey]; a key not held, e.g. one a [clear] already let go of, sends nothing. */
+    fun releaseKey(key: Key) {
+        if (!held.remove(key)) return
+        sendHeld()
     }
 
     /**
@@ -89,17 +110,17 @@ class ReportSender(
     }
 
     /**
-     * Drops every report not yet sent, and says so in the trace. A key already pressed keeps its
-     * release, and a Click Button held on the Host gets one; they go out as soon as any pause
-     * still running ends, so nothing is left held on the Host. [whenReleased] runs once, one pause
+     * Drops every report not yet sent, and says so in the trace, and forgets the held keys. A key or
+     * Click Button held down on the Host gets a release; they go out as soon as any pause still
+     * running ends, so nothing is left held on the Host. [whenReleased] runs once, one pause
      * after the last of them, or at once when nothing needs releasing and the link is quiet: the
      * moment the link can be closed without cutting a release off.
      */
     fun clear(whenReleased: () -> Unit = {}) {
-        val release = if (keyHeld) queue.firstOrNull() else null
-        val dropped = queue.size - (if (release != null) 1 else 0)
+        val dropped = queue.size
         queue.clear()
-        if (release != null) queue.addLast(release)
+        held.clear()
+        if (keysOnHost) queue.addLast(keys(0, emptyList()))
         buttons = 0
         if (buttonsOnHost != 0) queue.addLast(buttonChange(0))
         if (dropped > 0) trace.note("dropped $dropped unsent reports")
@@ -117,6 +138,22 @@ class ReportSender(
         onReleasesSent = null
         while (true) send(queue.removeFirstOrNull() ?: break)
     }
+
+    private fun keys(modifiers: Int, usages: List<Int>) = Pending(
+        HidReports.ID_KEYBOARD,
+        HidReports.keyboard(modifiers, *usages.distinct().toIntArray()),
+        holdsKeys = modifiers != 0 || usages.any { it != 0 },
+    )
+
+    // Sends the held keys as they are now, e.g. after one goes down or up.
+    private fun sendHeld() {
+        queue.addLast(keys(heldModifiers(), heldUsages()))
+        sendNext()
+    }
+
+    private fun heldModifiers() = held.fold(0) { modifiers, key -> modifiers or key.modifiers }
+
+    private fun heldUsages() = held.map { it.usage }.filter { it != 0 }
 
     private fun buttonChange(buttons: Int) =
         Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, 0, 0), buttons = buttons)
@@ -146,7 +183,7 @@ class ReportSender(
     }
 
     private fun send(report: Pending) {
-        keyHeld = report.releaseFollows
+        report.holdsKeys?.let { keysOnHost = it }
         report.buttons?.let { buttonsOnHost = it }
         trace.report(report.id, report.data, gateway.sendReport(report.id, report.data))
     }

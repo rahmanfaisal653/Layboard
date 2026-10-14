@@ -182,9 +182,19 @@ class HidController(
         }
     }
 
-    /** Presses and releases [usage] together with [modifiers]. */
+    /** Presses and releases [usage] together with [modifiers], with any held Special Keys still held. */
     fun sendKey(modifiers: Int, usage: Int) {
         connectedSender()?.pressKey(modifiers, usage)
+    }
+
+    /** Holds a Special Key down on the Host until [releaseKey]. */
+    fun holdKey(key: Key) {
+        connectedSender()?.holdKey(key)
+    }
+
+    /** Lets go of a Special Key held by [holdKey]. */
+    fun releaseKey(key: Key) {
+        connectedSender()?.releaseKey(key)
     }
 
     /** Moves the Host pointer by any amount; [ReportSender] merges and splits it into reports the link carries. */
@@ -206,7 +216,7 @@ class HidController(
         return HostRequests(BluetoothHidGateway(service, device), trace)
     }
 
-    // Reports still waiting are dropped; a key or Click Button already pressed is still released, so none stays held.
+    // Reports still waiting are dropped; a key or Click Button held on the Host is still released, so none stays held.
     private fun endReports() {
         sender?.clear()
         sender = null

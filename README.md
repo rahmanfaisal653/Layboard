@@ -8,7 +8,7 @@ A tiny Android app that turns your phone into a Bluetooth keyboard and mouse for
 
 ## Features
 
-- **Keyboard**: your phone's normal keyboard, plus Esc, Tab, Ctrl, Alt, Win and arrow keys. Tap Ctrl, Alt or Win, then the next key, to send shortcuts such as Ctrl+C or Alt+Tab. Long-press Win to send it on its own. Layout is US QWERTY; the computer's own layout decides which character appears.
+- **Keyboard**: your phone's normal keyboard, plus Esc, Tab, Ctrl, Alt, Win and arrow keys. These keys work like a real keyboard's: hold Ctrl, Alt or Win while tapping another key or clicking to send shortcuts such as Ctrl+C, Alt+Tab or Ctrl+click, and hold an arrow to repeat it. Layout is US QWERTY; the computer's own layout decides which character appears.
 - **Mouse**: slide a finger to move the pointer. It only moves; it never clicks or scrolls.
 - **Click Buttons**: separate left and right buttons.
 

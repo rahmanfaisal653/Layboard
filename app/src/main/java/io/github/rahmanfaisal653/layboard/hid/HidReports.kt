@@ -35,9 +35,19 @@ object HidReports {
 
     val DESCRIPTOR: ByteArray = ByteArray(DESCRIPTOR_INTS.size) { DESCRIPTOR_INTS[it].toByte() }
 
-    /** Keyboard report body (without the report ID). A usage of 0 means "no key pressed". */
-    fun keyboard(modifiers: Int, usage: Int): ByteArray =
-        byteArrayOf(modifiers.toByte(), 0, usage.toByte(), 0, 0, 0, 0, 0)
+    /** How many keys besides the modifiers one keyboard report can hold down, as the descriptor declares. */
+    const val KEY_SLOTS = 6
+
+    /**
+     * Keyboard report body (without the report ID). A usage of 0 means "no key pressed"; keys beyond
+     * [KEY_SLOTS] do not fit and are left out.
+     */
+    fun keyboard(modifiers: Int, vararg usages: Int): ByteArray {
+        val report = ByteArray(2 + KEY_SLOTS)
+        report[0] = modifiers.toByte()
+        usages.filter { it != 0 }.take(KEY_SLOTS).forEachIndexed { slot, usage -> report[2 + slot] = usage.toByte() }
+        return report
+    }
 
     /** Mouse report body (without the report ID). dx and dy must be within -127..127. */
     fun mouse(buttons: Int, dx: Int, dy: Int): ByteArray =

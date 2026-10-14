@@ -19,6 +19,13 @@ class ReportSenderTest {
 
     private val release = press(0)
 
+    /** A keyboard report holding [modifiers] and up to six [usages]. */
+    private fun keys(modifiers: Int, vararg usages: Int) =
+        Call.Report(HidReports.ID_KEYBOARD, bytes(modifiers, 0, *(usages + IntArray(6 - usages.size))))
+
+    private val ctrl = Key(0, HidReports.MOD_CTRL)
+    private val alt = Key(0, HidReports.MOD_ALT)
+
     private fun mouse(buttons: Int, dx: Int, dy: Int) = Call.Report(HidReports.ID_MOUSE, bytes(buttons, dx, dy))
 
     private fun movementSent(): Pair<Int, Int> {
@@ -198,10 +205,10 @@ class ReportSenderTest {
         sender.pressKey(0, 0x04)
         sender.pressKey(0, 0x05)
         sender.pressKey(0, 0x06)
-        // Press 1 is out and its release is kept; presses 2 and 3 with their releases are dropped.
+        // Press 1 is out; everything behind it is dropped and a fresh release takes the place of its own.
         sender.clear()
 
-        assertTrue(trace.lines.last(), "dropped 4 unsent reports" in trace.lines.last())
+        assertTrue(trace.lines.last(), "dropped 5 unsent reports" in trace.lines.last())
     }
 
     @Test
@@ -559,5 +566,180 @@ class ReportSenderTest {
             ),
             gateway.calls,
         )
+    }
+
+    @Test
+    fun eachSpecialKeyIsHeldFromTouchDownUntilTouchUp() {
+        listOf(KeyMap.ESCAPE, KeyMap.TAB, KeyMap.LEFT, KeyMap.UP, KeyMap.DOWN, KeyMap.RIGHT).forEach { usage ->
+            gateway.clear()
+
+            sender.holdKey(Key(usage))
+            settle()
+            assertEquals(listOf(press(usage)), gateway.calls)
+
+            sender.releaseKey(Key(usage))
+            settle()
+            assertEquals(listOf(press(usage), release), gateway.calls)
+        }
+    }
+
+    @Test
+    fun aHeldModifierIsHeldOnItsOwn() {
+        sender.holdKey(ctrl)
+        settle()
+        sender.releaseKey(ctrl)
+        settle()
+
+        assertEquals(listOf(keys(HidReports.MOD_CTRL), release), gateway.calls)
+    }
+
+    @Test
+    fun severalSpecialKeysCanBeHeldAtOnceAndLetGoInAnyOrder() {
+        sender.holdKey(ctrl)
+        sender.holdKey(alt)
+        sender.holdKey(Key(KeyMap.RIGHT))
+        sender.holdKey(Key(KeyMap.UP))
+        sender.releaseKey(Key(KeyMap.RIGHT))
+        sender.releaseKey(ctrl)
+        sender.releaseKey(Key(KeyMap.UP))
+        sender.releaseKey(alt)
+        settle()
+
+        assertEquals(
+            listOf(
+                keys(0x01),
+                keys(0x05),
+                keys(0x05, KeyMap.RIGHT),
+                keys(0x05, KeyMap.RIGHT, KeyMap.UP),
+                keys(0x05, KeyMap.UP),
+                keys(0x04, KeyMap.UP),
+                keys(0x04),
+                release,
+            ),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun aTypedKeyIsSentWithTheHeldModifiersWhichStayHeldAfterIt() {
+        sender.holdKey(ctrl)
+        sender.pressKey(0, 0x06)
+        sender.pressKey(0, KeyMap.BACKSPACE)
+        sender.releaseKey(ctrl)
+        settle()
+
+        assertEquals(
+            listOf(
+                keys(0x01),
+                keys(0x01, 0x06),
+                keys(0x01),
+                keys(0x01, KeyMap.BACKSPACE),
+                keys(0x01),
+                release,
+            ),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun aTypedKeysOwnShiftCombinesWithTheHeldModifiersForThatKeyOnly() {
+        sender.holdKey(ctrl)
+        sender.pressKey(HidReports.MOD_SHIFT, 0x1D)
+        settle()
+
+        assertEquals(listOf(keys(0x01), keys(0x03, 0x1D), keys(0x01)), gateway.calls)
+    }
+
+    @Test
+    fun aTypedKeyLeavesAHeldArrowHeld() {
+        sender.holdKey(Key(KeyMap.RIGHT))
+        sender.pressKey(0, 0x04)
+        settle()
+
+        assertEquals(listOf(keys(0, KeyMap.RIGHT), keys(0, KeyMap.RIGHT, 0x04), keys(0, KeyMap.RIGHT)), gateway.calls)
+    }
+
+    @Test
+    fun noReportCarriesMoreThanSixKeys() {
+        val usages = listOf(KeyMap.ESCAPE, KeyMap.TAB, KeyMap.LEFT, KeyMap.UP, KeyMap.DOWN, KeyMap.RIGHT)
+        usages.forEach { sender.holdKey(Key(it)) }
+        sender.pressKey(0, 0x04)
+        settle()
+
+        gateway.calls.filterIsInstance<Call.Report>().forEach { assertEquals(8, it.data.size) }
+        assertEquals(keys(0, *usages.toIntArray()), gateway.calls.last())
+    }
+
+    @Test
+    fun holdingAKeyAlreadyHeldOrReleasingOneNotHeldSendsNothing() {
+        sender.releaseKey(ctrl)
+        sender.holdKey(ctrl)
+        sender.holdKey(ctrl)
+        settle()
+
+        assertEquals(listOf(keys(0x01)), gateway.calls)
+    }
+
+    @Test
+    fun aClickWhileAModifierIsHeldReachesTheHostAfterTheModifier() {
+        sender.holdKey(ctrl)
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.setClickButton(HidReports.BUTTON_LEFT, false)
+        sender.releaseKey(ctrl)
+        settle()
+
+        assertEquals(
+            listOf(keys(0x01), mouse(HidReports.BUTTON_LEFT, 0, 0), mouse(0, 0, 0), release),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun clearingReleasesEveryHeldKeyBeforeTheConnectionCloses() {
+        var sentWhenClosed: List<Call>? = null
+        sender.holdKey(ctrl)
+        sender.holdKey(Key(KeyMap.RIGHT))
+        settle()
+
+        sender.clear { sentWhenClosed = gateway.calls.toList() }
+        settle()
+
+        assertEquals(listOf(keys(0x01), keys(0x01, KeyMap.RIGHT), release), sentWhenClosed)
+    }
+
+    @Test
+    fun clearingForgetsTheHeldKeysSoTheirLaterTouchUpSendsNothing() {
+        sender.holdKey(ctrl)
+        settle()
+        sender.clear()
+        settle()
+        gateway.clear()
+
+        sender.releaseKey(ctrl)
+        sender.pressKey(0, 0x04)
+        settle()
+
+        assertEquals(listOf(press(0x04), release), gateway.calls)
+    }
+
+    @Test
+    fun clearingAHoldNotYetSentSendsNoRelease() {
+        sender.moveMouse(1, 0) // goes out at once
+        sender.holdKey(ctrl)
+
+        sender.clear()
+        settle()
+
+        assertEquals(listOf(mouse(0, 1, 0)), gateway.calls)
+    }
+
+    @Test
+    fun clearingNowReleasesHeldKeysAtOnce() {
+        sender.holdKey(alt)
+        settle()
+
+        sender.clearNow()
+
+        assertEquals(listOf(keys(0x04), release), gateway.calls)
     }
 }

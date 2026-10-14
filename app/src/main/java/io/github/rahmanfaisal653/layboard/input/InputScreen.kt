@@ -14,9 +14,9 @@ import io.github.rahmanfaisal653.layboard.R
 import io.github.rahmanfaisal653.layboard.hid.HidController
 import io.github.rahmanfaisal653.layboard.hid.HidReports
 import io.github.rahmanfaisal653.layboard.hid.HidTrace
+import io.github.rahmanfaisal653.layboard.hid.Key
 import io.github.rahmanfaisal653.layboard.hid.KeyMap
 import io.github.rahmanfaisal653.layboard.keyboard.KeyboardCaptureView
-import io.github.rahmanfaisal653.layboard.keyboard.KeyboardSender
 import io.github.rahmanfaisal653.layboard.keyboard.TypedText
 import io.github.rahmanfaisal653.layboard.mouse.MouseAreaView
 
@@ -32,7 +32,6 @@ class InputScreen(
     private val hostName: TextView = view.findViewById(R.id.input_host_name)
     private val mouse: MouseAreaView = view.findViewById(R.id.input_mouse)
     private val capture: KeyboardCaptureView = view.findViewById(R.id.input_capture)
-    private val sender = KeyboardSender(hid::sendKey, hid::setClickButton)
 
     // The keyboard only attaches to a view in the focused window, which a fresh screen may not be yet.
     private var waitingForFocus = false
@@ -45,10 +44,16 @@ class InputScreen(
         }
     }
 
-    private val modifierButtons = mapOf(
-        R.id.key_ctrl to HidReports.MOD_CTRL,
-        R.id.key_alt to HidReports.MOD_ALT,
-        R.id.key_win to HidReports.MOD_GUI,
+    private val specialKeys = mapOf(
+        R.id.key_esc to Key(KeyMap.ESCAPE),
+        R.id.key_tab to Key(KeyMap.TAB),
+        R.id.key_ctrl to Key(0, HidReports.MOD_CTRL),
+        R.id.key_alt to Key(0, HidReports.MOD_ALT),
+        R.id.key_win to Key(0, HidReports.MOD_GUI),
+        R.id.key_left to Key(KeyMap.LEFT),
+        R.id.key_up to Key(KeyMap.UP),
+        R.id.key_down to Key(KeyMap.DOWN),
+        R.id.key_right to Key(KeyMap.RIGHT),
     )
 
     private val clickButtons = mapOf(
@@ -57,7 +62,9 @@ class InputScreen(
     )
 
     init {
-        capture.typing = TypedText(sender::press, sender::correct, hid::note)
+        // A correction goes out like any other key, with the held Special Keys, as a real keyboard's would.
+        val send = { key: Key -> hid.sendKey(key.modifiers, key.usage) }
+        capture.typing = TypedText(send, send, hid::note)
         mouse.onMove = { dx, dy -> hid.moveMouse(dx, dy) }
 
         view.findViewById<View>(R.id.input_keyboard).setOnClickListener { showKeyboard() }
@@ -66,32 +73,8 @@ class InputScreen(
             onDisconnect()
         }
 
-        clickButtons.forEach { (id, mask) -> bindClickButton(id, mask) }
-
-        mapOf(
-            R.id.key_esc to KeyMap.ESCAPE,
-            R.id.key_tab to KeyMap.TAB,
-            R.id.key_left to KeyMap.LEFT,
-            R.id.key_up to KeyMap.UP,
-            R.id.key_down to KeyMap.DOWN,
-            R.id.key_right to KeyMap.RIGHT,
-        ).forEach { (id, usage) ->
-            view.findViewById<View>(id).setOnClickListener { sender.press(usage) }
-        }
-
-        modifierButtons.forEach { (id, modifier) ->
-            view.findViewById<View>(id).setOnClickListener { sender.toggleModifier(modifier) }
-        }
-        // A long press on Win sends it alone, e.g. to open the Start menu.
-        view.findViewById<View>(R.id.key_win).setOnLongClickListener {
-            sender.tapWin()
-            true
-        }
-        sender.onArmedChanged = { armed ->
-            modifierButtons.forEach { (id, modifier) ->
-                view.findViewById<View>(id).isActivated = armed and modifier != 0
-            }
-        }
+        clickButtons.forEach { (id, mask) -> bindHeld(id, { hid.setClickButton(mask, true) }, { hid.setClickButton(mask, false) }) }
+        specialKeys.forEach { (id, key) -> bindHeld(id, { hid.holdKey(key) }, { hid.releaseKey(key) }) }
     }
 
     fun bind(host: String, pointerSpeed: Float) {
@@ -126,26 +109,27 @@ class InputScreen(
     }
 
     /**
-     * Another screen replaces this one, as when the Connection ends: closes the keyboard, clears any Armed
-     * modifier and lets go of the Click Buttons, so the next Connection starts with nothing armed or held.
+     * Another screen replaces this one, as when the Connection ends: closes the keyboard and lets go of
+     * the Click Buttons and Special Keys, so the next Connection starts with nothing held. The Host side
+     * is released by the Connection ending, before its link closes.
      */
     fun leave() {
         hideKeyboard()
-        sender.disarm()
-        clickButtons.keys.forEach { view.findViewById<View>(it).isPressed = false }
+        (clickButtons.keys + specialKeys.keys).forEach { view.findViewById<View>(it).isPressed = false }
     }
 
+    /** Makes button [id] act like a real key or button: [down] on touch down, [up] on touch up or cancel. */
     @SuppressLint("ClickableViewAccessibility")
-    private fun bindClickButton(id: Int, mask: Int) {
+    private fun bindHeld(id: Int, down: () -> Unit, up: () -> Unit) {
         view.findViewById<View>(id).setOnTouchListener { button, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     button.isPressed = true
-                    sender.click(mask, true)
+                    down()
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     button.isPressed = false
-                    sender.click(mask, false)
+                    up()
                 }
             }
             true
