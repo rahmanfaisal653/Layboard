@@ -151,6 +151,55 @@ class MouseGestureTest {
     }
 
     @Test
+    fun scrollSpeedScalesTheScrollButNotThePointer() {
+        gesture.scrollSpeed = 2f
+        touch(listOf(at(0f, 0f), at(10f, 0f)))
+        touch(listOf(at(0f, 100f), at(10f, 100f)))
+        val doubled = scrolledBy().first
+        touch(listOf())
+        scrolls.clear()
+        gesture.scrollSpeed = 1f
+        touch(listOf(at(0f, 0f), at(10f, 0f)))
+        touch(listOf(at(0f, 100f), at(10f, 100f)))
+
+        assertEquals(doubled, scrolledBy().first * 2)
+        assertTrue(doubled != 0)
+        assertTrue(moves.isEmpty())
+    }
+
+    @Test
+    fun scrollSpeedLeavesThePointerAlone() {
+        gesture.scrollSpeed = 3f
+        touch(listOf(at(10f, 10f)))
+        touch(listOf(at(20f, 15f)))
+
+        assertEquals(20 to 10, movedBy())
+    }
+
+    @Test
+    fun scrollSpeedAlsoScalesTheGlideAfterAFlick() {
+        fun glideDistance(speed: Float): Int {
+            scrolls.clear()
+            gesture.scrollSpeed = speed
+            touch(listOf(at(0f, 0f), at(10f, 0f)))
+            repeat(5) {
+                clock.advanceBy(10)
+                touch(listOf(at(0f, (it + 1) * 10f), at(10f, (it + 1) * 10f)))
+            }
+            touch(listOf())
+            val before = scrolls.size
+            clock.advanceBy(2000)
+            return scrolls.drop(before).sumOf { it.first }
+        }
+
+        val slow = glideDistance(0.5f)
+        val fast = glideDistance(2f)
+
+        assertTrue(slow != 0)
+        assertTrue(fast > slow * 2)
+    }
+
+    @Test
     fun liftingEveryFingerEndsTheGestureAndTheNextTouchStartsAfresh() {
         touch(listOf(at(0f, 0f)))
         touch(listOf(at(10f, 0f)))

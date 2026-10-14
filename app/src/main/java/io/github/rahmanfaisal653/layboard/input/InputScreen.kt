@@ -81,9 +81,10 @@ class InputScreen(
         specialKeys.forEach { (id, key) -> bindHeld(id, { hid.holdKey(key) }, { hid.releaseKey(key) }) }
     }
 
-    fun bind(host: String, pointerSpeed: Float) {
+    fun bind(host: String, pointerSpeed: Float, scrollSpeed: Float) {
         hostName.text = host
         mouse.speed = pointerSpeed
+        mouse.scrollSpeed = scrollSpeed
     }
 
     /** Shows or hides both rows of Special Keys; hiding lets go of any still held, as lifting the finger would. */

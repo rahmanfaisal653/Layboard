@@ -7,6 +7,7 @@
     <string name="hosts_empty">No paired hosts yet.\nTap “Pair new host”, then choose this phone in your computer’s Bluetooth settings.</string>
     <string name="hosts_pair">Pair new host</string>
     <string name="hosts_speed_label">Pointer speed</string>
+    <string name="hosts_scroll_speed_label">Scroll speed</string>
     <string name="connecting">Connecting to %1$s…</string>
     <string name="disconnected">Disconnected</string>
     <string name="could_not_connect">Could not connect to %1$s</string>

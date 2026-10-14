@@ -7,6 +7,7 @@
     <string name="hosts_empty">Belum ada host yang dipasangkan.\nKetuk “Pasangkan host baru”, lalu pilih ponsel ini di pengaturan Bluetooth komputer Anda.</string>
     <string name="hosts_pair">Pasangkan host baru</string>
     <string name="hosts_speed_label">Kecepatan kursor</string>
+    <string name="hosts_scroll_speed_label">Kecepatan gulir</string>
     <string name="connecting">Menyambung ke %1$s…</string>
     <string name="disconnected">Terputus</string>
     <string name="could_not_connect">Tidak dapat menyambung ke %1$s</string>

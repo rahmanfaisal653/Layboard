@@ -42,6 +42,13 @@ class MouseAreaView @JvmOverloads constructor(
             gesture.pointerSpeed = value
         }
 
+    /** Scroll Speed multiplier; see [MouseGesture.scrollSpeed]. */
+    var scrollSpeed: Float
+        get() = gesture.scrollSpeed
+        set(value) {
+            gesture.scrollSpeed = value
+        }
+
     private val hintText = context.getString(R.string.mouse_hint)
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = context.getColor(R.color.text_secondary)

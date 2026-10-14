@@ -13,7 +13,7 @@ import android.widget.TextView
 import io.github.rahmanfaisal653.layboard.Prefs
 import io.github.rahmanfaisal653.layboard.R
 
-/** Lists paired Hosts, starts pairing a new one, and holds the pointer speed slider. */
+/** Lists paired Hosts, starts pairing a new one, and holds the Pointer Speed and Scroll Speed sliders. */
 class HostsScreen(
     context: Context,
     prefs: Prefs,
@@ -32,12 +32,17 @@ class HostsScreen(
             list.setOnItemClickListener { _, _, position, _ -> onHostSelected(adapter.getItem(position)) }
         }
         view.findViewById<View>(R.id.hosts_pair).setOnClickListener { onPairNew() }
-        view.findViewById<SeekBar>(R.id.hosts_speed).apply {
+        bindSpeedSlider(R.id.hosts_speed, prefs.speedStep) { prefs.speedStep = it }
+        bindSpeedSlider(R.id.hosts_scroll_speed, prefs.scrollSpeedStep) { prefs.scrollSpeedStep = it }
+    }
+
+    private fun bindSpeedSlider(id: Int, step: Int, remember: (Int) -> Unit) {
+        view.findViewById<SeekBar>(id).apply {
             max = Prefs.MAX_SPEED_STEP
-            progress = prefs.speedStep
+            progress = step
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                    if (fromUser) prefs.speedStep = progress
+                    if (fromUser) remember(progress)
                 }
 
                 override fun onStartTrackingTouch(seekBar: SeekBar) = Unit

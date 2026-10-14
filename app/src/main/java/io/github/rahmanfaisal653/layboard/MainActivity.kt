@@ -220,7 +220,7 @@ class MainActivity : Activity(), HidLifecycle.Listener<BluetoothDevice> {
     }
 
     private fun showInput(host: BluetoothDevice) {
-        inputScreen.bind(nameOf(host), prefs.speedMultiplier)
+        inputScreen.bind(nameOf(host), prefs.speedMultiplier, prefs.scrollSpeedMultiplier)
         val newlyShown = show(inputScreen.view)
         if (newlyShown) inputScreen.view.post { inputScreen.showKeyboard() }
     }

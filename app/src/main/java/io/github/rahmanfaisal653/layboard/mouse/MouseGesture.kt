@@ -37,6 +37,13 @@ class MouseGesture(
             pointer.speed = value
         }
 
+    /** Scroll Speed multiplier; see [PointerMotion.speed]. It also scales a glide, which is scrolling too. */
+    var scrollSpeed: Float
+        get() = scroll.speed
+        set(value) {
+            scroll.speed = value
+        }
+
     private var fingerCount = 0
     private var lastX = 0f
     private var lastY = 0f
@@ -147,7 +154,7 @@ class MouseGesture(
     }
 
     companion object {
-        /** Scroll units per dp of two-finger travel, a tenth of a step; fixed until Scroll Speed arrives. */
+        /** Scroll units per dp of two-finger travel at a [scrollSpeed] of 1, a tenth of a step. */
         const val SCROLL_UNITS_PER_DP = 0.1f * HidReports.SCROLL_UNITS_PER_STEP
 
         /** The glide sends a step this often. */
