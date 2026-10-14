@@ -32,6 +32,7 @@ class InputScreen(
     private val hostName: TextView = view.findViewById(R.id.input_host_name)
     private val mouse: MouseAreaView = view.findViewById(R.id.input_mouse)
     private val capture: KeyboardCaptureView = view.findViewById(R.id.input_capture)
+    private val keys: View = view.findViewById(R.id.input_keys)
 
     // The keyboard only attaches to a view in the focused window, which a fresh screen may not be yet.
     private var waitingForFocus = false
@@ -68,6 +69,7 @@ class InputScreen(
         mouse.onMove = { dx, dy -> hid.moveMouse(dx, dy) }
         mouse.onScroll = { wheel, pan -> hid.scrollMouse(wheel, pan) }
 
+        view.findViewById<View>(R.id.input_keys_toggle).setOnClickListener { showKeys(keys.visibility != View.VISIBLE) }
         view.findViewById<View>(R.id.input_keyboard).setOnClickListener { showKeyboard() }
         view.findViewById<View>(R.id.input_disconnect).setOnClickListener {
             hideKeyboard()
@@ -81,6 +83,17 @@ class InputScreen(
     fun bind(host: String, pointerSpeed: Float) {
         hostName.text = host
         mouse.speed = pointerSpeed
+    }
+
+    /** Shows or hides both rows of Special Keys; hiding lets go of any still held, as lifting the finger would. */
+    private fun showKeys(shown: Boolean) {
+        keys.visibility = if (shown) View.VISIBLE else View.GONE
+        if (shown) return
+        // A finger on a key that goes away may never report its lift.
+        specialKeys.forEach { (id, key) ->
+            view.findViewById<View>(id).isPressed = false
+            hid.releaseKey(key)
+        }
     }
 
     /** Opens the Phone's keyboard on the capture target, waiting for window focus if it has none yet. */
@@ -111,11 +124,12 @@ class InputScreen(
 
     /**
      * Another screen replaces this one, as when the Connection ends: closes the keyboard and lets go of
-     * the Click Buttons and Special Keys, so the next Connection starts with nothing held. The Host side
-     * is released by the Connection ending, before its link closes.
+     * the Click Buttons and Special Keys, so the next Connection starts with nothing held and the
+     * Special Keys shown. The Host side is released by the Connection ending, before its link closes.
      */
     fun leave() {
         hideKeyboard()
+        keys.visibility = View.VISIBLE
         (clickButtons.keys + specialKeys.keys).forEach { view.findViewById<View>(it).isPressed = false }
     }
 
