@@ -54,18 +54,20 @@ class MouseAreaView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // A finger lifting is still in the event that reports it, so it is left out here.
-        val lifting = when (event.actionMasked) {
-            MotionEvent.ACTION_POINTER_UP -> event.actionIndex
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> -1
-            else -> null
-        }
-        val fingers = if (lifting == -1) {
-            emptyList()
-        } else {
-            (0 until event.pointerCount).filter { it != lifting }.map { event.getX(it) to event.getY(it) }
+        val fingers = when (event.actionMasked) {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> emptyList()
+            // The finger lifting is still in the event that reports it, so it is left out.
+            MotionEvent.ACTION_POINTER_UP -> fingersExcept(event, event.actionIndex)
+            else -> fingersExcept(event, NONE)
         }
         gesture.update(fingers)
         return true
+    }
+
+    private fun fingersExcept(event: MotionEvent, skipped: Int) =
+        (0 until event.pointerCount).filter { it != skipped }.map { event.getX(it) to event.getY(it) }
+
+    private companion object {
+        const val NONE = -1
     }
 }
