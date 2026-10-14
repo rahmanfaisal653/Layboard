@@ -1,7 +1,6 @@
 package io.github.rahmanfaisal653.layboard.hid
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,8 +22,8 @@ class ReportContractTest {
 
     @Test
     fun mouseReportIsAsLongAsTheDescriptorDeclares() {
-        assertEquals(3, declaredBytes(HidReports.ID_MOUSE))
-        assertEquals(declaredBytes(HidReports.ID_MOUSE), HidReports.mouse(HidReports.BUTTON_LEFT, 5, -3).size)
+        assertEquals(5, declaredBytes(HidReports.ID_MOUSE))
+        assertEquals(declaredBytes(HidReports.ID_MOUSE), HidReports.mouse(HidReports.BUTTON_LEFT, 5, -3, 2, -1).size)
     }
 
     @Test
@@ -33,11 +32,24 @@ class ReportContractTest {
     }
 
     @Test
-    fun theMouseCanOnlyMoveSoTheHostIsNeverSentAScroll() {
+    fun theMouseDeclaresMovementAVerticalWheelAndAHorizontalPan() {
         assertTrue(GENERIC_DESKTOP_X in declared.usages)
         assertTrue(GENERIC_DESKTOP_Y in declared.usages)
-        assertFalse(GENERIC_DESKTOP_WHEEL in declared.usages)
-        assertFalse(CONSUMER_AC_PAN in declared.usages)
+        assertTrue(GENERIC_DESKTOP_WHEEL in declared.usages)
+        assertTrue(CONSUMER_AC_PAN in declared.usages)
+    }
+
+    @Test
+    fun theMouseReportCarriesButtonsMovementWheelAndPanInThatOrder() {
+        assertEquals(
+            listOf(1, 5, -3, 2, -1).map { it.toByte() },
+            HidReports.mouse(HidReports.BUTTON_LEFT, 5, -3, 2, -1).toList(),
+        )
+    }
+
+    @Test
+    fun aMouseReportWithoutScrollingLeavesWheelAndPanAtZero() {
+        assertEquals(listOf<Byte>(0, 4, -4, 0, 0), HidReports.mouse(0, 4, -4).toList())
     }
 
     @Test

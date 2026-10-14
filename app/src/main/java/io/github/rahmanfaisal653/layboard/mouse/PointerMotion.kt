@@ -1,12 +1,13 @@
 package io.github.rahmanfaisal653.layboard.mouse
 
 /**
- * Turns finger travel on the Mouse, in screen pixels, into whole Host pointer pixels scaled by
- * Pointer Speed. The fraction a move leaves over is carried into the next: at every point of a slide
- * the pointer has been sent exactly the whole-pixel part of the finger's scaled travel so far.
+ * Turns finger travel on the Mouse, in screen pixels, into whole Host units scaled by a speed: pointer
+ * pixels by Pointer Speed, or scroll steps when [unitsPerDp] is the scroll scale. The fraction a move
+ * leaves over is carried into the next: at every point of a slide the Host has been sent exactly the
+ * whole-unit part of the finger's scaled travel so far.
  */
-class PointerMotion(private val density: Float) {
-    /** Pointer Speed multiplier; 1.0 moves the Host pointer [BASE_PIXELS_PER_DP] pixels per dp of finger travel. */
+class PointerMotion(private val density: Float, private val unitsPerDp: Float = BASE_PIXELS_PER_DP) {
+    /** Speed multiplier; 1.0 moves the Host [unitsPerDp] units per dp of finger travel. */
     var speed = 1f
 
     // The slide's scaled travel so far, and how much of it has been sent.
@@ -25,7 +26,7 @@ class PointerMotion(private val density: Float) {
 
     /** Adds a finger move and returns the whole pixels to send now, or null when it adds up to none yet. */
     fun move(deltaX: Float, deltaY: Float): Pair<Int, Int>? {
-        val scale = speed.toDouble() * BASE_PIXELS_PER_DP / density
+        val scale = speed.toDouble() * unitsPerDp / density
         travelX += deltaX * scale
         travelY += deltaY * scale
         val moveX = travelX.toInt() - sentX

@@ -26,7 +26,8 @@ class ReportSenderTest {
     private val ctrl = Key(0, HidReports.MOD_CTRL)
     private val alt = Key(0, HidReports.MOD_ALT)
 
-    private fun mouse(buttons: Int, dx: Int, dy: Int) = Call.Report(HidReports.ID_MOUSE, bytes(buttons, dx, dy))
+    private fun mouse(buttons: Int, dx: Int, dy: Int, wheel: Int = 0, pan: Int = 0) =
+        Call.Report(HidReports.ID_MOUSE, bytes(buttons, dx, dy, wheel, pan))
 
     private fun movementSent(): Pair<Int, Int> {
         val reports = gateway.calls.filterIsInstance<Call.Report>().filter { it.id == HidReports.ID_MOUSE }
@@ -238,7 +239,7 @@ class ReportSenderTest {
         sender.clear()
         settle()
 
-        assertEquals(listOf(Call.Report(HidReports.ID_MOUSE, bytes(0, 1, 0))), gateway.calls)
+        assertEquals(listOf(mouse(0, 1, 0)), gateway.calls)
     }
 
     @Test
@@ -560,7 +561,7 @@ class ReportSenderTest {
             listOf(
                 press(0x04),
                 release,
-                Call.Report(HidReports.ID_MOUSE, bytes(0, 3, 4)),
+                mouse(0, 3, 4),
                 press(0x05),
                 release,
             ),
@@ -741,5 +742,104 @@ class ReportSenderTest {
         sender.clearNow()
 
         assertEquals(listOf(keys(0x04), release), gateway.calls)
+    }
+
+    @Test
+    fun scrollingSendsTheWheelAndPanSteps() {
+        sender.scrollMouse(3, -2)
+        settle()
+
+        assertEquals(listOf(mouse(0, 0, 0, 3, -2)), gateway.calls)
+    }
+
+    @Test
+    fun scrollStepsMadeWhileTheLinkRestsGoOutAsOneReport() {
+        sender.scrollMouse(1, 0) // goes out at once
+        sender.scrollMouse(1, 2)
+        sender.scrollMouse(2, -1)
+        sender.scrollMouse(-1, 4)
+        settle()
+
+        assertEquals(listOf(mouse(0, 0, 0, 1, 0), mouse(0, 0, 0, 2, 5)), gateway.calls)
+    }
+
+    @Test
+    fun scrollStepsBeyondOneReportsLimitFollowInMoreReportsAndNoneIsLost() {
+        sender.scrollMouse(1, 0) // goes out at once
+        sender.scrollMouse(100, 0)
+        sender.scrollMouse(100, -300)
+        settle()
+
+        val reports = gateway.calls.filterIsInstance<Call.Report>()
+        assertEquals(201, reports.sumOf { it.data[3].toInt() })
+        assertEquals(-300, reports.sumOf { it.data[4].toInt() })
+        assertTrue(reports.all { it.data[3] in -127..127 && it.data[4] in -127..127 })
+    }
+
+    @Test
+    fun scrollStepsThatCancelOutSendNothingMore() {
+        sender.scrollMouse(1, 0) // goes out at once
+        sender.scrollMouse(5, -2)
+        sender.scrollMouse(-5, 2)
+        settle()
+
+        assertEquals(listOf(mouse(0, 0, 0, 1, 0)), gateway.calls)
+    }
+
+    @Test
+    fun aScrollAndAPointerMoveWaitingTogetherGoOutInOneReport() {
+        sender.moveMouse(1, 0) // goes out at once
+        sender.moveMouse(2, 3)
+        sender.scrollMouse(4, 5)
+        settle()
+
+        assertEquals(listOf(mouse(0, 1, 0), mouse(0, 2, 3, 4, 5)), gateway.calls)
+    }
+
+    @Test
+    fun scrollingCarriesTheClickButtonsHeldSoCtrlAndDragStayHeldThroughIt() {
+        sender.holdKey(ctrl)
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.scrollMouse(2, 0)
+        settle()
+
+        assertEquals(
+            listOf(keys(HidReports.MOD_CTRL), mouse(HidReports.BUTTON_LEFT, 0, 0), mouse(HidReports.BUTTON_LEFT, 0, 0, 2, 0)),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun scrollingNeverReleasesAHeldSpecialKey() {
+        sender.holdKey(ctrl)
+        gateway.clear()
+
+        sender.scrollMouse(0, 1)
+        sender.scrollMouse(2, 0)
+        settle()
+
+        assertTrue(gateway.calls.all { it is Call.Report && it.id == HidReports.ID_MOUSE })
+    }
+
+    @Test
+    fun scrollStepsAreMergedOnlyIntoMovesMadeWithTheSameButtonsHeld() {
+        sender.scrollMouse(1, 0) // goes out at once
+        sender.scrollMouse(2, 0)
+        sender.setClickButton(HidReports.BUTTON_LEFT, true)
+        sender.scrollMouse(3, 0)
+        settle()
+
+        assertEquals(
+            listOf(mouse(0, 0, 0, 1, 0), mouse(0, 0, 0, 2, 0), mouse(HidReports.BUTTON_LEFT, 0, 0), mouse(HidReports.BUTTON_LEFT, 0, 0, 3, 0)),
+            gateway.calls,
+        )
+    }
+
+    @Test
+    fun aScrollOfNothingSendsNothing() {
+        sender.scrollMouse(0, 0)
+        settle()
+
+        assertTrue(gateway.calls.isEmpty())
     }
 }

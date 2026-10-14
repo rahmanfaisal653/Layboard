@@ -66,6 +66,7 @@ class InputScreen(
         val send = { key: Key -> hid.sendKey(key.modifiers, key.usage) }
         capture.typing = TypedText(send, send, hid::note)
         mouse.onMove = { dx, dy -> hid.moveMouse(dx, dy) }
+        mouse.onScroll = { wheel, pan -> hid.scrollMouse(wheel, pan) }
 
         view.findViewById<View>(R.id.input_keyboard).setOnClickListener { showKeyboard() }
         view.findViewById<View>(R.id.input_disconnect).setOnClickListener {

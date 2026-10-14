@@ -65,8 +65,8 @@ class KeyMapTest {
     @Test
     fun mouseReportEncodesSignedDeltas() {
         assertArrayEquals(
-            byteArrayOf(HidReports.BUTTON_LEFT.toByte(), 5, (-3).toByte()),
-            HidReports.mouse(HidReports.BUTTON_LEFT, 5, -3),
+            byteArrayOf(HidReports.BUTTON_LEFT.toByte(), 5, (-3).toByte(), 2, (-1).toByte()),
+            HidReports.mouse(HidReports.BUTTON_LEFT, 5, -3, 2, -1),
         )
     }
 }

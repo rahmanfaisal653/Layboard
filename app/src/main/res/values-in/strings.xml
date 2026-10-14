@@ -14,7 +14,7 @@
     <!-- Input -->
     <string name="input_keyboard">Keyboard</string>
     <string name="input_disconnect">Putuskan</string>
-    <string name="mouse_hint">Geser untuk menggerakkan kursor</string>
+    <string name="mouse_hint">Geser untuk menggerakkan kursor, dua jari untuk menggulir</string>
     <string name="click_left">Klik kiri</string>
     <string name="click_right">Klik kanan</string>
 

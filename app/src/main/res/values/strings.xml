@@ -14,7 +14,7 @@
     <!-- Input -->
     <string name="input_keyboard">Keyboard</string>
     <string name="input_disconnect">Disconnect</string>
-    <string name="mouse_hint">Slide to move the cursor</string>
+    <string name="mouse_hint">Slide to move the cursor, two fingers to scroll</string>
     <string name="click_left">Left click</string>
     <string name="click_right">Right click</string>
     <string name="key_esc" translatable="false">Esc</string>

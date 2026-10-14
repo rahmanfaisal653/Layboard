@@ -202,6 +202,11 @@ class HidController(
         connectedSender()?.moveMouse(dx, dy)
     }
 
+    /** Scrolls the Host by wheel and pan steps; merged and split into reports like [moveMouse], with held Click Buttons carried. */
+    fun scrollMouse(wheel: Int, pan: Int) {
+        connectedSender()?.scrollMouse(wheel, pan)
+    }
+
     /** Presses or releases a Click Button; moves made while one is held drag on the Host. */
     fun setClickButton(mask: Int, down: Boolean) {
         connectedSender()?.setClickButton(mask, down)

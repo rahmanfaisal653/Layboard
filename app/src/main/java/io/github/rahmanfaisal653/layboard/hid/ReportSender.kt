@@ -13,8 +13,8 @@ class ReportSender(
 ) {
     /**
      * A report waiting its turn; [holdsKeys] says whether a keyboard report leaves any key down on the
-     * Host, [buttons] the Click Buttons a mouse report holds, and [motion] a pointer move that later
-     * moves may still be merged into.
+     * Host, [buttons] the Click Buttons a mouse report holds, and [motion] a pointer move or scroll that later
+     * moves and scrolls may still be merged into.
      */
     private class Pending(
         val id: Int,
@@ -24,7 +24,7 @@ class ReportSender(
         val motion: Motion? = null,
     )
 
-    private class Motion(val buttons: Int, val dx: Int, val dy: Int)
+    private class Motion(val buttons: Int, val dx: Int, val dy: Int, val wheel: Int, val pan: Int)
 
     private val queue = ArrayDeque<Pending>()
 
@@ -87,27 +87,13 @@ class ReportSender(
      * report; what does not fit in one report's limit follows in as many more as it needs. Nothing is lost
      * on the way.
      */
-    fun moveMouse(dx: Int, dy: Int) {
-        var restX = dx
-        var restY = dy
-        val tail = queue.lastOrNull()?.motion
-        if (tail != null && tail.buttons == buttons) {
-            val mergedX = step(tail.dx + restX)
-            val mergedY = step(tail.dy + restY)
-            restX -= mergedX - tail.dx
-            restY -= mergedY - tail.dy
-            queue.removeLast()
-            if (mergedX != 0 || mergedY != 0) queue.addLast(motion(buttons, mergedX, mergedY))
-        }
-        while (restX != 0 || restY != 0) {
-            val stepX = step(restX)
-            val stepY = step(restY)
-            queue.addLast(motion(buttons, stepX, stepY))
-            restX -= stepX
-            restY -= stepY
-        }
-        sendNext()
-    }
+    fun moveMouse(dx: Int, dy: Int) = addMotion(dx, dy, 0, 0)
+
+    /**
+     * Scrolls the Host by [wheel] steps vertically and [pan] steps horizontally (a positive wheel scrolls
+     * up, a positive pan right), with the Click Buttons held now. Merged and split like [moveMouse].
+     */
+    fun scrollMouse(wheel: Int, pan: Int) = addMotion(0, 0, wheel, pan)
 
     /**
      * Drops every report not yet sent, and says so in the trace, and forgets the held keys. A key or
@@ -145,6 +131,40 @@ class ReportSender(
         holdsKeys = modifiers != 0 || usages.any { it != 0 },
     )
 
+    private fun addMotion(dx: Int, dy: Int, wheel: Int, pan: Int) {
+        var restX = dx
+        var restY = dy
+        var restWheel = wheel
+        var restPan = pan
+        val tail = queue.lastOrNull()?.motion
+        if (tail != null && tail.buttons == buttons) {
+            val mergedX = step(tail.dx + restX)
+            val mergedY = step(tail.dy + restY)
+            val mergedWheel = step(tail.wheel + restWheel)
+            val mergedPan = step(tail.pan + restPan)
+            restX -= mergedX - tail.dx
+            restY -= mergedY - tail.dy
+            restWheel -= mergedWheel - tail.wheel
+            restPan -= mergedPan - tail.pan
+            queue.removeLast()
+            if (mergedX != 0 || mergedY != 0 || mergedWheel != 0 || mergedPan != 0) {
+                queue.addLast(motion(buttons, mergedX, mergedY, mergedWheel, mergedPan))
+            }
+        }
+        while (restX != 0 || restY != 0 || restWheel != 0 || restPan != 0) {
+            val stepX = step(restX)
+            val stepY = step(restY)
+            val stepWheel = step(restWheel)
+            val stepPan = step(restPan)
+            queue.addLast(motion(buttons, stepX, stepY, stepWheel, stepPan))
+            restX -= stepX
+            restY -= stepY
+            restWheel -= stepWheel
+            restPan -= stepPan
+        }
+        sendNext()
+    }
+
     // Sends the held keys as they are now, e.g. after one goes down or up.
     private fun sendHeld() {
         queue.addLast(keys(heldModifiers(), heldUsages()))
@@ -158,10 +178,14 @@ class ReportSender(
     private fun buttonChange(buttons: Int) =
         Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, 0, 0), buttons = buttons)
 
-    private fun motion(buttons: Int, dx: Int, dy: Int) =
-        Pending(HidReports.ID_MOUSE, HidReports.mouse(buttons, dx, dy), buttons = buttons, motion = Motion(buttons, dx, dy))
+    private fun motion(buttons: Int, dx: Int, dy: Int, wheel: Int, pan: Int) = Pending(
+        HidReports.ID_MOUSE,
+        HidReports.mouse(buttons, dx, dy, wheel, pan),
+        buttons = buttons,
+        motion = Motion(buttons, dx, dy, wheel, pan),
+    )
 
-    // As much of [distance] as one mouse report can carry.
+    // As much of [distance] as one mouse report can carry on any one axis.
     private fun step(distance: Int) = distance.coerceIn(-MAX_STEP, MAX_STEP)
 
     private fun sendNext() {
@@ -192,7 +216,7 @@ class ReportSender(
         /** The pause between two reports, in milliseconds; the one value to tune if the link drops reports. */
         const val DEFAULT_PAUSE_MS = 10L
 
-        /** The furthest one mouse report can move the pointer on each axis, as the descriptor declares. */
+        /** The furthest one mouse report can move the pointer or scroll on each axis, as the descriptor declares. */
         const val MAX_STEP = 127
     }
 }

@@ -29,7 +29,7 @@ class HostRequestsTest {
     fun hostAskingForTheMouseReportGetsAnIdleMouseReport() {
         requests.onGetReport(type = 1, id = HidReports.ID_MOUSE, bufferSize = 0)
 
-        assertEquals(listOf(Call.Reply(1, HidReports.ID_MOUSE, zeros(3))), gateway.calls)
+        assertEquals(listOf(Call.Reply(1, HidReports.ID_MOUSE, zeros(5))), gateway.calls)
     }
 
     @Test
