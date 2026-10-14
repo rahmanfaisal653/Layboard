@@ -72,6 +72,7 @@ class InputScreen(
         view.findViewById<View>(R.id.input_keys_toggle).setOnClickListener { showKeys(keys.visibility != View.VISIBLE) }
         view.findViewById<View>(R.id.input_keyboard).setOnClickListener { showKeyboard() }
         view.findViewById<View>(R.id.input_disconnect).setOnClickListener {
+            stopGlide()
             hideKeyboard()
             onDisconnect()
         }
@@ -122,13 +123,18 @@ class InputScreen(
         view.windowToken?.let { inputMethods.hideSoftInputFromWindow(it, 0) }
     }
 
+    /** Ends any scroll still gliding on the Mouse, for a Connection that is ending while this screen is still shown. */
+    fun stopGlide() = mouse.stopGlide()
+
     /**
-     * Another screen replaces this one, as when the Connection ends: closes the keyboard and lets go of
-     * the Click Buttons and Special Keys, so the next Connection starts with nothing held and the
-     * Special Keys shown. The Host side is released by the Connection ending, before its link closes.
+     * Another screen replaces this one, as when the Connection ends: closes the keyboard, stops a scroll
+     * still gliding, and lets go of the Click Buttons and Special Keys, so the next Connection starts with
+     * nothing held and the Special Keys shown. The Host side is released by the Connection ending, before
+     * its link closes.
      */
     fun leave() {
         hideKeyboard()
+        stopGlide()
         keys.visibility = View.VISIBLE
         (clickButtons.keys + specialKeys.keys).forEach { view.findViewById<View>(it).isPressed = false }
     }

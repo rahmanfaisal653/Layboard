@@ -3,15 +3,19 @@ package io.github.rahmanfaisal653.layboard.mouse
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.os.Handler
+import android.os.Looper
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import io.github.rahmanfaisal653.layboard.R
+import io.github.rahmanfaisal653.layboard.hid.HandlerScheduler
 
 /**
  * The Mouse: one finger moves the pointer, two scroll, like a touchpad. It never clicks, not even on
- * a tap; clicking is the job of the Click Buttons. What the fingers mean is [MouseGesture]'s job.
+ * a tap; clicking is the job of the Click Buttons. A quick two-finger flick keeps scrolling after the
+ * fingers lift. What the fingers mean is [MouseGesture]'s job.
  */
 class MouseAreaView @JvmOverloads constructor(
     context: Context,
@@ -26,6 +30,7 @@ class MouseAreaView @JvmOverloads constructor(
 
     private val gesture = MouseGesture(
         resources.displayMetrics.density,
+        HandlerScheduler(Handler(Looper.getMainLooper())),
         onMove = { dx, dy -> onMove?.invoke(dx, dy) },
         onScroll = { wheel, pan -> onScroll?.invoke(wheel, pan) },
     )
@@ -53,14 +58,26 @@ class MouseAreaView @JvmOverloads constructor(
         canvas.drawText(hintText, width / 2f, baseline, hintPaint)
     }
 
+    /** Ends any scroll still gliding after the fingers lifted, as when the Input Screen is left. */
+    fun stopGlide() = gesture.stopGlide()
+
+    override fun onDetachedFromWindow() {
+        gesture.stopGlide()
+        super.onDetachedFromWindow()
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            gesture.cancel()
+            return true
+        }
         val fingers = when (event.actionMasked) {
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> emptyList()
+            MotionEvent.ACTION_UP -> emptyList()
             // The finger lifting is still in the event that reports it, so it is left out.
             MotionEvent.ACTION_POINTER_UP -> fingersExcept(event, event.actionIndex)
             else -> fingersExcept(event, NONE)
         }
-        gesture.update(fingers)
+        gesture.update(fingers, event.eventTime)
         return true
     }
 

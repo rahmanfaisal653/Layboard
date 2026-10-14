@@ -91,7 +91,10 @@ class MainActivity : Activity(), HidLifecycle.Listener<BluetoothDevice> {
         // connected then, realme's stack never finishes the drop and refuses every later
         // Registration until Bluetooth restarts, so the Connection ends here, before onStop.
         // Layboard's own dialogs only open without a Connection, so they lose nothing.
-        if (connectedHost != null) hid.disconnect()
+        if (connectedHost != null) {
+            inputScreen.stopGlide()
+            hid.disconnect()
+        }
         super.onPause()
     }
 
